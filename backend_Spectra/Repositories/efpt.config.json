@@ -1,0 +1,93 @@
+﻿{
+   "CodeGenerationMode": 4,
+   "ContextClassName": "Context",
+   "ContextNamespace": null,
+   "FilterSchemas": false,
+   "IncludeConnectionString": true,
+   "ModelNamespace": null,
+   "OutputContextPath": null,
+   "OutputPath": "Models",
+   "PreserveCasingWithRegex": true,
+   "ProjectRootNamespace": "Repositories",
+   "Schemas": null,
+   "SelectedHandlebarsLanguage": 2,
+   "SelectedToBeGenerated": 0,
+   "T4TemplatePath": null,
+   "Tables": [
+      {
+         "Name": "[dbo].[COMPLAINT_REQUEST]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[FRAME]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[FRAME_MEDIA]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[LENS_FEATURE]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[LENS_TYPE]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ORDER_ITEM]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[ORDERS]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[PAYMENT]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[PREORDER]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[PREORDER_ITEM]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[PRESCRIPTION]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[USER]",
+         "ObjectType": 0
+      }
+   ],
+   "UiHint": null,
+   "UncountableWords": null,
+   "UseAsyncStoredProcedureCalls": true,
+   "UseBoolPropertiesWithoutDefaultSql": false,
+   "UseDatabaseNames": false,
+   "UseDatabaseNamesForRoutines": true,
+   "UseDateOnlyTimeOnly": true,
+   "UseDbContextSplitting": false,
+   "UseDecimalDataAnnotationForSprocResult": true,
+   "UseFluentApiOnly": true,
+   "UseHandleBars": false,
+   "UseHierarchyId": false,
+   "UseInflector": true,
+   "UseInternalAccessModifiersForSprocsAndFunctions": false,
+   "UseLegacyPluralizer": false,
+   "UseManyToManyEntity": false,
+   "UseNoDefaultConstructor": false,
+   "UseNoNavigations": false,
+   "UseNoObjectFilter": false,
+   "UseNodaTime": false,
+   "UseNullableReferences": false,
+   "UsePrefixNavigationNaming": false,
+   "UseSchemaFolders": false,
+   "UseSchemaNamespaces": false,
+   "UseSpatial": false,
+   "UseT4": false,
+   "UseT4Split": false
+}
