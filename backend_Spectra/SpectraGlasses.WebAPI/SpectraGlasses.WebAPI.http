@@ -1,0 +1,6 @@
+@SpectraGlasses.WebAPI_HostAddress = http://localhost:5020
+
+GET {{SpectraGlasses.WebAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

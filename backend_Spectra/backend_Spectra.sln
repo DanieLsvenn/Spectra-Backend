@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Repositories", "Repositorie
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Services", "Services\Services.csproj", "{D2DC1058-F7E0-4B22-89A2-801E6D6EA857}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpectraGlasses.WebAPI", "SpectraGlasses.WebAPI\SpectraGlasses.WebAPI.csproj", "{EE9AB349-6DF5-4B8C-B9A2-2E01680ED843}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{D2DC1058-F7E0-4B22-89A2-801E6D6EA857}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2DC1058-F7E0-4B22-89A2-801E6D6EA857}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2DC1058-F7E0-4B22-89A2-801E6D6EA857}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE9AB349-6DF5-4B8C-B9A2-2E01680ED843}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE9AB349-6DF5-4B8C-B9A2-2E01680ED843}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE9AB349-6DF5-4B8C-B9A2-2E01680ED843}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE9AB349-6DF5-4B8C-B9A2-2E01680ED843}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
