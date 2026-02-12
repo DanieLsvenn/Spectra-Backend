@@ -20,4 +20,41 @@
         public string? FullName { get; set; }
         public string? Role { get; set; }
     }
+
+    public class CreateFrameRequest
+    {
+        public string FrameName { get; set; } = string.Empty;
+        public string? Brand { get; set; }
+        public string? Color { get; set; }
+        public string? Material { get; set; }
+        public int? LensWidth { get; set; }
+        public int? BridgeWidth { get; set; }
+        public int? FrameWidth { get; set; }
+        public int? TempleLength { get; set; }
+        public string? Shape { get; set; }
+        public string? Size { get; set; }
+        public double? BasePrice { get; set; }
+    }
+
+    public class UpdateFrameRequest
+    {
+        public string? FrameName { get; set; }
+        public string? Brand { get; set; }
+        public string? Color { get; set; }
+        public string? Material { get; set; }
+        public int? LensWidth { get; set; }
+        public int? BridgeWidth { get; set; }
+        public int? FrameWidth { get; set; }
+        public int? TempleLength { get; set; }
+        public string? Shape { get; set; }
+        public string? Size { get; set; }
+        public double? BasePrice { get; set; }
+        public string? Status { get; set; }
+    }
+
+    public class FrameValidationResult
+    {
+        public bool IsValid { get; set; }
+        public List<string> Errors { get; set; } = new();
+    }
 }

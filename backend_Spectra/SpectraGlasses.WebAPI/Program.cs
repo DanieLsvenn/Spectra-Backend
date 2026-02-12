@@ -51,9 +51,12 @@ builder.Services.AddDbContext<Context>(options =>
 
 // Register repositories
 builder.Services.AddScoped<GenericRepository<User>>();
+builder.Services.AddScoped<GenericRepository<Frame>>();
+builder.Services.AddScoped<GenericRepository<FrameMedium>>();
 
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IFrameService, FrameService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
