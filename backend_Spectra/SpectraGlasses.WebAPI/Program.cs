@@ -53,10 +53,16 @@ builder.Services.AddDbContext<Context>(options =>
 builder.Services.AddScoped<GenericRepository<User>>();
 builder.Services.AddScoped<GenericRepository<Frame>>();
 builder.Services.AddScoped<GenericRepository<FrameMedium>>();
+builder.Services.AddScoped<GenericRepository<LensType>>();
+builder.Services.AddScoped<GenericRepository<LensFeature>>();
+builder.Services.AddScoped<GenericRepository<OrderItem>>();
+builder.Services.AddScoped<GenericRepository<PreorderItem>>();
 
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IFrameService, FrameService>();
+builder.Services.AddScoped<ILensTypeService, LensTypeService>();
+builder.Services.AddScoped<ILensFeatureService, LensFeatureService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
