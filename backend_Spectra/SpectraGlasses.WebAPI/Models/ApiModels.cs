@@ -108,4 +108,100 @@
     }
 
     #endregion
+
+    #region Order Models
+
+    public class CreateOrderRequest
+    {
+        public string ShippingAddress { get; set; } = string.Empty;
+        public List<CreateOrderItemRequest> Items { get; set; } = new();
+    }
+
+    public class CreateOrderItemRequest
+    {
+        public Guid FrameId { get; set; }
+        public Guid? LensTypeId { get; set; }
+        public Guid? FeatureId { get; set; }
+        public Guid? PrescriptionId { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string? SelectedColor { get; set; }
+    }
+
+    public class UpdateOrderStatusRequest
+    {
+        public string Status { get; set; } = string.Empty;
+    }
+
+    public class OrderSummaryResponse
+    {
+        public Guid OrderId { get; set; }
+        public Guid? UserId { get; set; }
+        public double? TotalAmount { get; set; }
+        public string? ShippingAddress { get; set; }
+        public string? Status { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public int ItemCount { get; set; }
+    }
+
+    #endregion
+
+    #region Preorder Models
+
+    public class CreatePreorderRequest
+    {
+        public DateTime? ExpectedDate { get; set; }
+        public List<CreatePreorderItemRequest> Items { get; set; } = new();
+    }
+
+    public class CreatePreorderItemRequest
+    {
+        public Guid FrameId { get; set; }
+        public Guid? LensTypeId { get; set; }
+        public Guid? FeatureId { get; set; }
+        public Guid? PrescriptionId { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string? SelectedColor { get; set; }
+    }
+
+    public class ConvertPreorderRequest
+    {
+        public string ShippingAddress { get; set; } = string.Empty;
+    }
+
+    #endregion
+
+    #region Payment Models
+
+    public class CreatePaymentRequest
+    {
+        public Guid? OrderId { get; set; }
+        public Guid? PreorderId { get; set; }
+        public string PaymentMethod { get; set; } = "vnpay";
+    }
+
+    public class VnPayReturnRequest
+    {
+        public string vnp_TxnRef { get; set; } = string.Empty;
+        public string vnp_ResponseCode { get; set; } = string.Empty;
+        public string vnp_TransactionNo { get; set; } = string.Empty;
+        public string vnp_SecureHash { get; set; } = string.Empty;
+        public string vnp_Amount { get; set; } = string.Empty;
+        public string vnp_OrderInfo { get; set; } = string.Empty;
+        public string vnp_PayDate { get; set; } = string.Empty;
+        public string vnp_BankCode { get; set; } = string.Empty;
+    }
+
+    public class PaymentResponse
+    {
+        public Guid PaymentId { get; set; }
+        public Guid? OrderId { get; set; }
+        public Guid? PreorderId { get; set; }
+        public double? Amount { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? PaymentStatus { get; set; }
+        public string? PaymentUrl { get; set; }
+        public DateTime? PaidAt { get; set; }
+    }
+
+    #endregion
 }

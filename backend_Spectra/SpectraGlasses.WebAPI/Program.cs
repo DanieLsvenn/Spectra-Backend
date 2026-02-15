@@ -11,7 +11,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -55,14 +59,21 @@ builder.Services.AddScoped<GenericRepository<Frame>>();
 builder.Services.AddScoped<GenericRepository<FrameMedium>>();
 builder.Services.AddScoped<GenericRepository<LensType>>();
 builder.Services.AddScoped<GenericRepository<LensFeature>>();
+builder.Services.AddScoped<GenericRepository<Order>>();
 builder.Services.AddScoped<GenericRepository<OrderItem>>();
+builder.Services.AddScoped<GenericRepository<Preorder>>();
 builder.Services.AddScoped<GenericRepository<PreorderItem>>();
+builder.Services.AddScoped<GenericRepository<Payment>>();
+builder.Services.AddScoped<GenericRepository<Prescription>>();
 
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IFrameService, FrameService>();
 builder.Services.AddScoped<ILensTypeService, LensTypeService>();
 builder.Services.AddScoped<ILensFeatureService, LensFeatureService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IPreorderService, PreorderService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
