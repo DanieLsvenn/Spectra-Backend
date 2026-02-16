@@ -74,6 +74,7 @@ builder.Services.AddScoped<ILensFeatureService, LensFeatureService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPreorderService, PreorderService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IPrescriptionService, PrescriptionService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");

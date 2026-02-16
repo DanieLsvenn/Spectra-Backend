@@ -204,4 +204,80 @@
     }
 
     #endregion
+
+    #region Prescription Models
+
+    public class CreatePrescriptionRequest
+    {
+        // Right eye (OD - Oculus Dexter)
+        public double? SphereRight { get; set; }
+        public double? CylinderRight { get; set; }
+        public int? AxisRight { get; set; }
+        public double? AddRight { get; set; }
+
+        // Left eye (OS - Oculus Sinister)
+        public double? SphereLeft { get; set; }
+        public double? CylinderLeft { get; set; }
+        public int? AxisLeft { get; set; }
+        public double? AddLeft { get; set; }
+
+        // Both eyes
+        public int? PupillaryDistance { get; set; }
+
+        // Doctor/Clinic info
+        public string? DoctorName { get; set; }
+        public string? ClinicName { get; set; }
+
+        // Validity
+        public DateTime? ExpirationDate { get; set; }
+    }
+
+    public class UpdatePrescriptionRequest
+    {
+        public double? SphereRight { get; set; }
+        public double? CylinderRight { get; set; }
+        public int? AxisRight { get; set; }
+        public double? AddRight { get; set; }
+        public double? SphereLeft { get; set; }
+        public double? CylinderLeft { get; set; }
+        public int? AxisLeft { get; set; }
+        public double? AddLeft { get; set; }
+        public int? PupillaryDistance { get; set; }
+        public string? DoctorName { get; set; }
+        public string? ClinicName { get; set; }
+        public DateTime? ExpirationDate { get; set; }
+    }
+
+    public class PrescriptionResponse
+    {
+        public Guid PrescriptionId { get; set; }
+        public Guid? UserId { get; set; }
+        
+        // Right eye
+        public double? SphereRight { get; set; }
+        public double? CylinderRight { get; set; }
+        public int? AxisRight { get; set; }
+        public double? AddRight { get; set; }
+        
+        // Left eye
+        public double? SphereLeft { get; set; }
+        public double? CylinderLeft { get; set; }
+        public int? AxisLeft { get; set; }
+        public double? AddLeft { get; set; }
+        
+        // Both eyes
+        public int? PupillaryDistance { get; set; }
+        
+        // Doctor/Clinic
+        public string? DoctorName { get; set; }
+        public string? ClinicName { get; set; }
+        
+        // Status
+        public DateTime? ExpirationDate { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public bool IsExpired { get; set; }
+        public int DaysUntilExpiration { get; set; }
+    }
+
+    #endregion
 }
