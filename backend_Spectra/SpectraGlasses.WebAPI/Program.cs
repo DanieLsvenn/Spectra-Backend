@@ -70,6 +70,7 @@ builder.Services.AddScoped<GenericRepository<ComplaintRequest>>();
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IFrameService, FrameService>();
+builder.Services.AddScoped<IFrameMediaService, FrameMediaService>();
 builder.Services.AddScoped<ILensTypeService, LensTypeService>();
 builder.Services.AddScoped<ILensFeatureService, LensFeatureService>();
 builder.Services.AddScoped<IOrderService, OrderService>();

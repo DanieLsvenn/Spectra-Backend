@@ -369,4 +369,41 @@
     }
 
     #endregion
+
+    #region Frame Media Models
+
+    public class AddFrameMediaRequest
+    {
+        public Guid FrameId { get; set; }
+        public string MediaUrl { get; set; } = string.Empty;
+        public string MediaType { get; set; } = "image"; // image, video, thumbnail, gallery
+    }
+
+    public class AddMultipleFrameMediaRequest
+    {
+        public Guid FrameId { get; set; }
+        public List<MediaItemRequest> MediaItems { get; set; } = new();
+    }
+
+    public class MediaItemRequest
+    {
+        public string MediaUrl { get; set; } = string.Empty;
+        public string MediaType { get; set; } = "image";
+    }
+
+    public class UpdateFrameMediaRequest
+    {
+        public string? MediaUrl { get; set; }
+        public string? MediaType { get; set; }
+    }
+
+    public class FrameMediaResponse
+    {
+        public Guid MediaId { get; set; }
+        public Guid? FrameId { get; set; }
+        public string? MediaUrl { get; set; }
+        public string? MediaType { get; set; }
+    }
+
+    #endregion
 }
