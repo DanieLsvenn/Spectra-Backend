@@ -280,4 +280,93 @@
     }
 
     #endregion
+
+    #region Complaint Request Models
+
+    public class CreateComplaintRequest
+    {
+        public Guid OrderItemId { get; set; }
+        public string RequestType { get; set; } = string.Empty; // return, exchange, refund, complaint, warranty
+        public string Reason { get; set; } = string.Empty;
+        public string? MediaUrl { get; set; }
+    }
+
+    public class UpdateComplaintRequest
+    {
+        public string? RequestType { get; set; }
+        public string? Reason { get; set; }
+        public string? MediaUrl { get; set; }
+    }
+
+    public class UpdateComplaintStatusRequest
+    {
+        public string Status { get; set; } = string.Empty;
+    }
+
+    public class ComplaintResponse
+    {
+        public Guid RequestId { get; set; }
+        public Guid? UserId { get; set; }
+        public Guid? OrderItemId { get; set; }
+        public string? RequestType { get; set; }
+        public string? Reason { get; set; }
+        public string? MediaUrl { get; set; }
+        public string? Status { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public bool CanModify { get; set; }
+    }
+
+    #endregion
+
+    #region User Management Models
+
+    public class CreateUserRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string? FullName { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public string Role { get; set; } = "customer";
+    }
+
+    public class UpdateUserRequest
+    {
+        public string? FullName { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+    }
+
+    public class UpdateUserStatusRequest
+    {
+        public string Status { get; set; } = string.Empty; // active, inactive, suspended
+    }
+
+    public class UpdateUserRoleRequest
+    {
+        public string Role { get; set; } = string.Empty; // customer, staff, manager, admin
+    }
+
+    public class UserResponse
+    {
+        public Guid UserId { get; set; }
+        public string? FullName { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public string? Role { get; set; }
+        public string? Status { get; set; }
+        public DateTime? CreatedAt { get; set; }
+    }
+
+    public class UserSearchRequest
+    {
+        public string? SearchTerm { get; set; }
+        public string? Role { get; set; }
+        public string? Status { get; set; }
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 10;
+    }
+
+    #endregion
 }

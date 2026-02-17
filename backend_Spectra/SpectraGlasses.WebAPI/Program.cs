@@ -65,6 +65,7 @@ builder.Services.AddScoped<GenericRepository<Preorder>>();
 builder.Services.AddScoped<GenericRepository<PreorderItem>>();
 builder.Services.AddScoped<GenericRepository<Payment>>();
 builder.Services.AddScoped<GenericRepository<Prescription>>();
+builder.Services.AddScoped<GenericRepository<ComplaintRequest>>();
 
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -75,6 +76,8 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPreorderService, PreorderService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IPrescriptionService, PrescriptionService>();
+builder.Services.AddScoped<IComplaintRequestService, ComplaintRequestService>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
