@@ -21,6 +21,19 @@
         public string? Role { get; set; }
     }
 
+    public class RegisterRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string? FullName { get; set; }
+        public string? Phone { get; set; }
+    }
+
+    public class GoogleLoginRequest
+    {
+        public string IdToken { get; set; } = string.Empty;
+    }
+
     public class CreateFrameRequest
     {
         public string FrameName { get; set; } = string.Empty;
