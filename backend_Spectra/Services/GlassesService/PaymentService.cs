@@ -328,23 +328,43 @@ namespace Services.GlassesService
                 var vnp_Url = vnpayConfig["PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
                 var vnp_Version = vnpayConfig["Version"] ?? "2.1.0";
 
+                // Use Vietnam timezone (UTC+7) for VNPay
+                TimeZoneInfo vietnamTimeZone;
+                try
+                {
+                    // Windows
+                    vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+                }
+                catch
+                {
+                    // Linux/Mac
+                    vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+                }
+                var vietnamNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone);
+
                 var vnpay = new SortedDictionary<string, string>();
 
-                vnpay.Add("vnp_Version", vnp_Version);
+                vnpay.Add("vnp_Amount", ((long)(request.Amount * 100)).ToString());
                 vnpay.Add("vnp_Command", "pay");
-                vnpay.Add("vnp_TmnCode", vnp_TmnCode);
-                vnpay.Add("vnp_Amount", ((long)(request.Amount * 100)).ToString()); // VNPay requires amount in VND * 100
-                vnpay.Add("vnp_CreateDate", DateTime.Now.ToString("yyyyMMddHHmmss"));
+                vnpay.Add("vnp_CreateDate", vietnamNow.ToString("yyyyMMddHHmmss"));
                 vnpay.Add("vnp_CurrCode", "VND");
+                vnpay.Add("vnp_ExpireDate", vietnamNow.AddMinutes(15).ToString("yyyyMMddHHmmss"));
                 vnpay.Add("vnp_IpAddr", request.IpAddress);
                 vnpay.Add("vnp_Locale", "vn");
                 vnpay.Add("vnp_OrderInfo", request.OrderInfo);
                 vnpay.Add("vnp_OrderType", "other");
                 vnpay.Add("vnp_ReturnUrl", request.ReturnUrl);
+                vnpay.Add("vnp_TmnCode", vnp_TmnCode);
                 vnpay.Add("vnp_TxnRef", request.PaymentId.ToString());
-                vnpay.Add("vnp_ExpireDate", DateTime.Now.AddMinutes(15).ToString("yyyyMMddHHmmss"));
+                vnpay.Add("vnp_Version", vnp_Version);
 
-                // Build query string
+                // Build the data string for hashing (URL encoded values)
+                var signData = string.Join("&", vnpay.Select(kvp => $"{kvp.Key}={WebUtility.UrlEncode(kvp.Value)}"));
+                
+                // Create secure hash
+                var secureHash = HmacSHA512(vnp_HashSecret, signData);
+
+                // Build query string (URL encoded)
                 var queryString = new StringBuilder();
                 foreach (var kvp in vnpay)
                 {
@@ -352,14 +372,10 @@ namespace Services.GlassesService
                     {
                         queryString.Append("&");
                     }
-                    queryString.Append(WebUtility.UrlEncode(kvp.Key));
+                    queryString.Append(kvp.Key);
                     queryString.Append("=");
                     queryString.Append(WebUtility.UrlEncode(kvp.Value));
                 }
-
-                // Create secure hash
-                var signData = string.Join("&", vnpay.Select(kvp => $"{kvp.Key}={kvp.Value}"));
-                var secureHash = HmacSHA512(vnp_HashSecret, signData);
 
                 var paymentUrl = $"{vnp_Url}?{queryString}&vnp_SecureHash={secureHash}";
 
@@ -403,8 +419,8 @@ namespace Services.GlassesService
                 dataToVerify.Remove("vnp_SecureHash");
                 dataToVerify.Remove("vnp_SecureHashType");
 
-                // Verify signature
-                var signData = string.Join("&", dataToVerify.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+                // Verify signature (values should be URL encoded as received from query string)
+                var signData = string.Join("&", dataToVerify.Select(kvp => $"{kvp.Key}={WebUtility.UrlEncode(kvp.Value)}"));
                 var calculatedHash = HmacSHA512(vnp_HashSecret, signData);
 
                 if (!calculatedHash.Equals(vnp_SecureHash, StringComparison.InvariantCultureIgnoreCase))
