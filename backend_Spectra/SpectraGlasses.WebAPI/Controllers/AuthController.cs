@@ -208,20 +208,35 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             try
             {
-                // Verify the Firebase ID token
-                var firebaseUser = await VerifyFirebaseTokenAsync(request.IdToken);
+                // First try to verify as Google OAuth token
+                var googleUser = await VerifyGoogleTokenAsync(request.IdToken);
 
-                if (firebaseUser == null)
+                // If Google verification fails, try Firebase verification
+                if (googleUser == null)
+                {
+                    var firebaseUser = await VerifyFirebaseTokenAsync(request.IdToken);
+                    if (firebaseUser != null)
+                    {
+                        googleUser = new GoogleUserInfo
+                        {
+                            Email = firebaseUser.Email,
+                            Name = firebaseUser.Name,
+                            Sub = firebaseUser.Uid
+                        };
+                    }
+                }
+
+                if (googleUser == null)
                 {
                     return Unauthorized(new ErrorResponse
                     {
                         ErrorCode = "INVALID_TOKEN",
-                        Message = "Invalid or expired Firebase token"
+                        Message = "Invalid or expired Google token"
                     });
                 }
 
                 // Check if user exists
-                var existingUser = await _userService.GetUserByEmailAsync(firebaseUser.Email);
+                var existingUser = await _userService.GetUserByEmailAsync(googleUser.Email);
 
                 User user;
                 if (existingUser != null)
@@ -242,8 +257,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                     // Create new user
                     user = new User
                     {
-                        Email = firebaseUser.Email,
-                        FullName = firebaseUser.Name,
+                        Email = googleUser.Email,
+                        FullName = googleUser.Name,
                         PasswordHash = GenerateRandomPassword(), // Random password for Google users
                         Role = "customer",
                         Status = "active"
@@ -340,6 +355,59 @@ namespace SpectraGlasses.WebAPI.Controllers
             return Convert.ToBase64String(bytes);
         }
 
+        private async Task<GoogleUserInfo?> VerifyGoogleTokenAsync(string idToken)
+        {
+            try
+            {
+                var clientId = _configuration["Google:ClientId"];
+                
+                // Verify token using Google's tokeninfo endpoint
+                var verifyUrl = $"https://oauth2.googleapis.com/tokeninfo?id_token={idToken}";
+                
+                var response = await _httpClient.GetAsync(verifyUrl);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var tokenInfo = JsonSerializer.Deserialize<GoogleTokenInfo>(responseBody, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (tokenInfo == null)
+                {
+                    return null;
+                }
+
+                // Verify the token is for our app (audience check)
+                if (!string.IsNullOrEmpty(clientId) && tokenInfo.Aud != clientId)
+                {
+                    return null;
+                }
+
+                // Verify email is verified
+                if (tokenInfo.EmailVerified != "true")
+                {
+                    return null;
+                }
+
+                return new GoogleUserInfo
+                {
+                    Sub = tokenInfo.Sub,
+                    Email = tokenInfo.Email,
+                    Name = tokenInfo.Name ?? tokenInfo.Email?.Split('@')[0],
+                    Picture = tokenInfo.Picture
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private async Task<FirebaseUser?> VerifyFirebaseTokenAsync(string idToken)
         {
             try
@@ -392,6 +460,26 @@ namespace SpectraGlasses.WebAPI.Controllers
         #endregion
 
         #region Helper Classes
+
+        private class GoogleUserInfo
+        {
+            public string Sub { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public string? Name { get; set; }
+            public string? Picture { get; set; }
+        }
+
+        private class GoogleTokenInfo
+        {
+            public string Sub { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public string? Name { get; set; }
+            public string? Picture { get; set; }
+            public string? Aud { get; set; }
+            public string? EmailVerified { get; set; }
+            [System.Text.Json.Serialization.JsonPropertyName("email_verified")]
+            public string? Email_Verified { get => EmailVerified; set => EmailVerified = value; }
+        }
 
         private class FirebaseUser
         {

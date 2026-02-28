@@ -418,5 +418,22 @@
         public string? MediaType { get; set; }
     }
 
+    public class ImageUploadResponse
+    {
+        public bool Success { get; set; }
+        public string Url { get; set; } = string.Empty;
+        public string PublicId { get; set; } = string.Empty;
+        public string? Error { get; set; }
+    }
+
+    public class FrameMediaUploadResponse
+    {
+        public Guid MediaId { get; set; }
+        public Guid? FrameId { get; set; }
+        public string? MediaUrl { get; set; }
+        public string? MediaType { get; set; }
+        public string? PublicId { get; set; }
+    }
+
     #endregion
 }

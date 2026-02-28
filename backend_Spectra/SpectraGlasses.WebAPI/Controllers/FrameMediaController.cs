@@ -12,13 +12,16 @@ namespace SpectraGlasses.WebAPI.Controllers
     {
         private readonly IFrameMediaService _frameMediaService;
         private readonly IFrameService _frameService;
+        private readonly ICloudinaryService _cloudinaryService;
 
         public FrameMediaController(
             IFrameMediaService frameMediaService,
-            IFrameService frameService)
+            IFrameService frameService,
+            ICloudinaryService cloudinaryService)
         {
             _frameMediaService = frameMediaService;
             _frameService = frameService;
+            _cloudinaryService = cloudinaryService;
         }
 
         private FrameMediaResponse MapToResponse(FrameMedium media)
@@ -311,6 +314,350 @@ namespace SpectraGlasses.WebAPI.Controllers
             }
 
             await _frameMediaService.DeleteAllMediaByFrameIdAsync(frameId);
+
+            return NoContent();
+        }
+
+        /// <summary>
+        /// Uploads an image to Cloudinary and creates a media record for a frame (Manager only)
+        /// </summary>
+        /// <param name="frameId">The frame ID to associate the image with</param>
+        /// <param name="file">The image file to upload</param>
+        /// <param name="mediaType">The type of media (image, thumbnail, gallery). Defaults to "image"</param>
+        [HttpPost("upload/{frameId:guid}")]
+        [Authorize(Roles = "manager")]
+        [ProducesResponseType(typeof(FrameMediaUploadResponse), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> UploadImage(Guid frameId, IFormFile file, [FromQuery] string mediaType = "image")
+        {
+            // Validate frame exists
+            var frame = await _frameService.GetFrameByIdForManagerAsync(frameId);
+            if (frame == null)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "FRAME_NOT_FOUND",
+                    Message = "Frame not found"
+                });
+            }
+
+            // Validate file
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "No file provided"
+                });
+            }
+
+            // Validate file size (max 10MB)
+            const long maxFileSize = 10 * 1024 * 1024;
+            if (file.Length > maxFileSize)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "File size exceeds maximum allowed size of 10MB"
+                });
+            }
+
+            // Validate file type
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Invalid file type. Allowed: jpg, jpeg, png, gif, webp"
+                });
+            }
+
+            // Validate media type
+            if (!_frameMediaService.IsValidMediaType(mediaType))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Invalid media type. Allowed: image, video, thumbnail, gallery"
+                });
+            }
+
+            // Upload to Cloudinary
+            using var stream = file.OpenReadStream();
+            var folder = $"spectra/frames/{frameId}";
+            var uploadResult = await _cloudinaryService.UploadImageAsync(stream, file.FileName, folder);
+
+            if (!uploadResult.Success)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "UPLOAD_ERROR",
+                    Message = uploadResult.Error
+                });
+            }
+
+            // Create media record
+            var media = new FrameMedium
+            {
+                FrameId = frameId,
+                MediaUrl = uploadResult.Url,
+                MediaType = mediaType.ToLower()
+            };
+
+            var createdMedia = await _frameMediaService.AddMediaAsync(media);
+
+            return CreatedAtAction(
+                nameof(GetMediaById),
+                new { id = createdMedia.MediaId },
+                new FrameMediaUploadResponse
+                {
+                    MediaId = createdMedia.MediaId,
+                    FrameId = createdMedia.FrameId,
+                    MediaUrl = createdMedia.MediaUrl,
+                    MediaType = createdMedia.MediaType,
+                    PublicId = uploadResult.PublicId
+                }
+            );
+        }
+
+        /// <summary>
+        /// Uploads multiple images to Cloudinary and creates media records for a frame (Manager only)
+        /// </summary>
+        /// <param name="frameId">The frame ID to associate the images with</param>
+        /// <param name="files">The image files to upload</param>
+        /// <param name="mediaType">The type of media (image, thumbnail, gallery). Defaults to "image"</param>
+        [HttpPost("upload-multiple/{frameId:guid}")]
+        [Authorize(Roles = "manager")]
+        [ProducesResponseType(typeof(List<FrameMediaUploadResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> UploadMultipleImages(Guid frameId, List<IFormFile> files, [FromQuery] string mediaType = "image")
+        {
+            // Validate frame exists
+            var frame = await _frameService.GetFrameByIdForManagerAsync(frameId);
+            if (frame == null)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "FRAME_NOT_FOUND",
+                    Message = "Frame not found"
+                });
+            }
+
+            // Validate files
+            if (files == null || !files.Any())
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "No files provided"
+                });
+            }
+
+            // Validate max number of files (limit to 10 at a time)
+            if (files.Count > 10)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Maximum 10 files can be uploaded at once"
+                });
+            }
+
+            // Validate media type
+            if (!_frameMediaService.IsValidMediaType(mediaType))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Invalid media type. Allowed: image, video, thumbnail, gallery"
+                });
+            }
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            const long maxFileSize = 10 * 1024 * 1024;
+            var results = new List<FrameMediaUploadResponse>();
+            var errors = new List<string>();
+
+            for (int i = 0; i < files.Count; i++)
+            {
+                var file = files[i];
+
+                // Validate file
+                if (file == null || file.Length == 0)
+                {
+                    errors.Add($"File {i + 1}: Empty file");
+                    continue;
+                }
+
+                if (file.Length > maxFileSize)
+                {
+                    errors.Add($"File {i + 1}: Exceeds 10MB limit");
+                    continue;
+                }
+
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                if (!allowedExtensions.Contains(extension))
+                {
+                    errors.Add($"File {i + 1}: Invalid file type");
+                    continue;
+                }
+
+                // Upload to Cloudinary
+                using var stream = file.OpenReadStream();
+                var folder = $"spectra/frames/{frameId}";
+                var uploadResult = await _cloudinaryService.UploadImageAsync(stream, file.FileName, folder);
+
+                if (!uploadResult.Success)
+                {
+                    errors.Add($"File {i + 1}: {uploadResult.Error}");
+                    continue;
+                }
+
+                // Create media record
+                var media = new FrameMedium
+                {
+                    FrameId = frameId,
+                    MediaUrl = uploadResult.Url,
+                    MediaType = mediaType.ToLower()
+                };
+
+                var createdMedia = await _frameMediaService.AddMediaAsync(media);
+
+                results.Add(new FrameMediaUploadResponse
+                {
+                    MediaId = createdMedia.MediaId,
+                    FrameId = createdMedia.FrameId,
+                    MediaUrl = createdMedia.MediaUrl,
+                    MediaType = createdMedia.MediaType,
+                    PublicId = uploadResult.PublicId
+                });
+            }
+
+            if (!results.Any() && errors.Any())
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "UPLOAD_ERROR",
+                    Message = string.Join("; ", errors)
+                });
+            }
+
+            return CreatedAtAction(
+                nameof(GetMediaByFrameId),
+                new { frameId },
+                new
+                {
+                    UploadedMedia = results,
+                    Errors = errors.Any() ? errors : null
+                }
+            );
+        }
+
+        /// <summary>
+        /// Uploads an image to Cloudinary without associating it with a frame (Manager only)
+        /// Useful for getting a URL before creating/updating a frame
+        /// </summary>
+        /// <param name="file">The image file to upload</param>
+        /// <param name="folder">The folder to upload to. Defaults to "products"</param>
+        [HttpPost("upload")]
+        [Authorize(Roles = "manager")]
+        [ProducesResponseType(typeof(ImageUploadResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> UploadImageOnly(IFormFile file, [FromQuery] string folder = "spectra/products")
+        {
+            // Validate file
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "No file provided"
+                });
+            }
+
+            // Validate file size (max 10MB)
+            const long maxFileSize = 10 * 1024 * 1024;
+            if (file.Length > maxFileSize)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "File size exceeds maximum allowed size of 10MB"
+                });
+            }
+
+            // Validate file type
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Invalid file type. Allowed: jpg, jpeg, png, gif, webp"
+                });
+            }
+
+            // Upload to Cloudinary
+            using var stream = file.OpenReadStream();
+            var uploadResult = await _cloudinaryService.UploadImageAsync(stream, file.FileName, folder);
+
+            if (!uploadResult.Success)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "UPLOAD_ERROR",
+                    Message = uploadResult.Error
+                });
+            }
+
+            return Ok(new ImageUploadResponse
+            {
+                Success = true,
+                Url = uploadResult.Url,
+                PublicId = uploadResult.PublicId
+            });
+        }
+
+        /// <summary>
+        /// Deletes an image from Cloudinary by its public ID (Manager only)
+        /// </summary>
+        /// <param name="publicId">The Cloudinary public ID of the image to delete</param>
+        [HttpDelete("cloudinary/{*publicId}")]
+        [Authorize(Roles = "manager")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> DeleteFromCloudinary(string publicId)
+        {
+            if (string.IsNullOrWhiteSpace(publicId))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Public ID is required"
+                });
+            }
+
+            var result = await _cloudinaryService.DeleteImageAsync(publicId);
+
+            if (!result)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "DELETE_ERROR",
+                    Message = "Failed to delete image from Cloudinary"
+                });
+            }
 
             return NoContent();
         }
