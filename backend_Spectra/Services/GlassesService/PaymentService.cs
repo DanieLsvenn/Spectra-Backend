@@ -328,6 +328,15 @@ namespace Services.GlassesService
                 var vnp_Url = vnpayConfig["PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
                 var vnp_Version = vnpayConfig["Version"] ?? "2.1.0";
 
+                // Convert USD to VND (VNPay only accepts VND)
+                // Default rate: 1 USD = 25,000 VND (configurable in appsettings.json)
+                var usdToVndRate = double.TryParse(vnpayConfig["UsdToVndRate"], out var rate) ? rate : 25000;
+                var amountInVnd = request.Amount * usdToVndRate;
+                
+                // VNPay requires amount in VND * 100 (no decimal)
+                // Minimum amount is typically 10,000 VND
+                var vnpayAmount = (long)(amountInVnd * 100);
+
                 // Use Vietnam timezone (UTC+7) for VNPay
                 TimeZoneInfo vietnamTimeZone;
                 try
@@ -344,7 +353,7 @@ namespace Services.GlassesService
 
                 var vnpay = new SortedDictionary<string, string>();
 
-                vnpay.Add("vnp_Amount", ((long)(request.Amount * 100)).ToString());
+                vnpay.Add("vnp_Amount", vnpayAmount.ToString());
                 vnpay.Add("vnp_Command", "pay");
                 vnpay.Add("vnp_CreateDate", vietnamNow.ToString("yyyyMMddHHmmss"));
                 vnpay.Add("vnp_CurrCode", "VND");
