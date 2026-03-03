@@ -47,6 +47,8 @@
         public string? Shape { get; set; }
         public string? Size { get; set; }
         public double? BasePrice { get; set; }
+        public int? StockQuantity { get; set; }
+        public int? ReorderLevel { get; set; }
     }
 
     public class UpdateFrameRequest
@@ -63,12 +65,20 @@
         public string? Size { get; set; }
         public double? BasePrice { get; set; }
         public string? Status { get; set; }
+        public int? StockQuantity { get; set; }
+        public int? ReorderLevel { get; set; }
     }
 
     public class FrameValidationResult
     {
         public bool IsValid { get; set; }
         public List<string> Errors { get; set; } = new();
+    }
+
+    public class UpdateStockRequest
+    {
+        public int Quantity { get; set; }
+        public int? ReorderLevel { get; set; }
     }
 
     #region LensType Models

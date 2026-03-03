@@ -30,6 +30,13 @@ namespace Services.GlassesService
         Task<Frame?> UpdateFrameAsync(Guid frameId, Frame updatedFrame);
         Task<bool> SoftDeleteFrameAsync(Guid frameId);
 
+        // Inventory management
+        Task<bool> CheckStockAvailabilityAsync(Guid frameId, int quantity);
+        Task<bool> DeductStockAsync(Guid frameId, int quantity);
+        Task<bool> RestoreStockAsync(Guid frameId, int quantity);
+        Task<List<Frame>> GetLowStockFramesAsync();
+        Task<List<Frame>> GetOutOfStockFramesAsync();
+
         // Validation
         FrameValidationResult ValidateFrameSizeAttributes(int? lensWidth, int? bridgeWidth, int? frameWidth, int? templeLength);
     }
@@ -64,17 +71,30 @@ namespace Services.GlassesService
 
         public async Task<PaginationResult<Frame>> GetAvailableFramesAsync(int currentPage = 1, int pageSize = 10)
         {
-            Expression<Func<Frame, bool>> predicate = f => 
-                f.Status != null && f.Status.ToLower() == AvailableStatus;
+            // Load all frames with media, then filter in memory to avoid EF Core translation issues
+            var allFrames = await _frameRepository.GetAllAsyncInclude(f => f.FrameMedia);
+            
+            var availableFrames = allFrames
+                .Where(f => IsAvailableStatus(f.Status))
+                .OrderBy(f => f.FrameName)
+                .ToList();
 
-            return await _frameRepository.SearchWithPagingAsyncIncludeOrderBy(
-                predicate,
-                currentPage,
-                pageSize,
-                orderBy: f => f.FrameName,
-                ascending: true,
-                f => f.FrameMedia
-            );
+            // Manual pagination
+            var totalItems = availableFrames.Count;
+            var totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+            var items = availableFrames
+                .Skip((currentPage - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return new PaginationResult<Frame>
+            {
+                TotalItems = totalItems,
+                TotalPages = totalPages,
+                CurrentPage = currentPage,
+                PageSize = pageSize,
+                Items = items
+            };
         }
 
         public async Task<Frame?> GetFrameByIdAsync(Guid frameId)
@@ -84,7 +104,7 @@ namespace Services.GlassesService
                 f => f.FrameMedia
             );
 
-            if (frame == null || frame.Status?.ToLower() != AvailableStatus)
+            if (frame == null || !IsAvailableStatus(frame.Status))
             {
                 return null;
             }
@@ -96,7 +116,7 @@ namespace Services.GlassesService
         {
             var frame = await _frameRepository.GetByIdAsync(frameId);
             
-            if (frame == null || frame.Status?.ToLower() != AvailableStatus)
+            if (frame == null || !IsAvailableStatus(frame.Status))
             {
                 return new List<FrameMedium>();
             }
@@ -105,23 +125,41 @@ namespace Services.GlassesService
             return media.ToList();
         }
 
+        // Helper method for case-insensitive status comparison
+        private static bool IsAvailableStatus(string? status)
+        {
+            return AvailableStatus.Equals(status, StringComparison.OrdinalIgnoreCase);
+        }
+
         #endregion
 
         #region Manager Operations
 
         public async Task<PaginationResult<Frame>> GetAllFramesAsync(int currentPage = 1, int pageSize = 10)
         {
-            // Returns all frames regardless of status (for managers)
-            Expression<Func<Frame, bool>> predicate = f => true;
+            // Load all frames with media, then paginate in memory
+            var allFrames = await _frameRepository.GetAllAsyncInclude(f => f.FrameMedia);
+            
+            var orderedFrames = allFrames
+                .OrderBy(f => f.FrameName)
+                .ToList();
 
-            return await _frameRepository.SearchWithPagingAsyncIncludeOrderBy(
-                predicate,
-                currentPage,
-                pageSize,
-                orderBy: f => f.FrameName,
-                ascending: true,
-                f => f.FrameMedia
-            );
+            // Manual pagination
+            var totalItems = orderedFrames.Count;
+            var totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+            var items = orderedFrames
+                .Skip((currentPage - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return new PaginationResult<Frame>
+            {
+                TotalItems = totalItems,
+                TotalPages = totalPages,
+                CurrentPage = currentPage,
+                PageSize = pageSize,
+                Items = items
+            };
         }
 
         public async Task<Frame?> GetFrameByIdForManagerAsync(Guid frameId)
@@ -189,6 +227,12 @@ namespace Services.GlassesService
             if (!string.IsNullOrEmpty(updatedFrame.Status))
                 existingFrame.Status = updatedFrame.Status;
 
+            if (updatedFrame.StockQuantity.HasValue)
+                existingFrame.StockQuantity = updatedFrame.StockQuantity;
+
+            if (updatedFrame.ReorderLevel.HasValue)
+                existingFrame.ReorderLevel = updatedFrame.ReorderLevel;
+
             return await _frameRepository.UpdateAsync(existingFrame);
         }
 
@@ -208,6 +252,85 @@ namespace Services.GlassesService
             await _frameRepository.UpdateAsync(frame);
             
             return true;
+        }
+
+        #endregion
+
+        #region Inventory Management
+
+        public async Task<bool> CheckStockAvailabilityAsync(Guid frameId, int quantity)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            
+            if (frame == null)
+                return false;
+
+            return (frame.StockQuantity ?? 0) >= quantity;
+        }
+
+        public async Task<bool> DeductStockAsync(Guid frameId, int quantity)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            
+            if (frame == null)
+                return false;
+
+            var currentStock = frame.StockQuantity ?? 0;
+            if (currentStock < quantity)
+                return false;
+
+            frame.StockQuantity = currentStock - quantity;
+            
+            // Auto-update status if out of stock
+            if (frame.StockQuantity <= 0)
+            {
+                frame.Status = "out_of_stock";
+            }
+
+            await _frameRepository.UpdateAsync(frame);
+            return true;
+        }
+
+        public async Task<bool> RestoreStockAsync(Guid frameId, int quantity)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            
+            if (frame == null)
+                return false;
+
+            var currentStock = frame.StockQuantity ?? 0;
+            frame.StockQuantity = currentStock + quantity;
+            
+            // Auto-update status if back in stock
+            if (frame.StockQuantity > 0 && frame.Status?.ToLower() == "out_of_stock")
+            {
+                frame.Status = AvailableStatus;
+            }
+
+            await _frameRepository.UpdateAsync(frame);
+            return true;
+        }
+
+        public async Task<List<Frame>> GetLowStockFramesAsync()
+        {
+            var allFrames = await _frameRepository.GetAllAsync();
+            return allFrames
+                .Where(f => f.Status?.ToLower() == AvailableStatus &&
+                           (f.StockQuantity ?? 0) <= (f.ReorderLevel ?? 5) &&
+                           (f.StockQuantity ?? 0) > 0)
+                .ToList();
+        }
+
+        public async Task<List<Frame>> GetOutOfStockFramesAsync()
+        {
+            var allFrames = await _frameRepository.GetAllAsync();
+            return allFrames
+                .Where(f => (f.StockQuantity ?? 0) <= 0 || 
+                           f.Status?.ToLower() == "out_of_stock")
+                .ToList();
         }
 
         #endregion

@@ -95,36 +95,56 @@ namespace Services.GlassesService
             _frameRepository = frameRepository;
         }
 
+        // SQL Server datetime minimum value (1753-01-01)
+        private static readonly DateTime SqlMinDate = new DateTime(1753, 1, 1);
+        // Use a reasonable max date instead of DateTime.MaxValue
+        private static readonly DateTime SqlMaxDate = new DateTime(9999, 12, 31);
+
         #region Statistics
 
         public async Task<DashboardStatistics> GetStatisticsAsync(DateTime? startDate = null, DateTime? endDate = null)
         {
-            // Default to all time if no dates specified
-            var start = startDate ?? DateTime.MinValue;
-            var end = endDate ?? DateTime.MaxValue;
+            // If no dates specified, get all data
+            var hasDateFilter = startDate.HasValue || endDate.HasValue;
+            var start = startDate ?? SqlMinDate;
+            var end = endDate ?? SqlMaxDate;
 
-            // Get orders in date range
-            var orders = await _orderRepository.SearchAsync(o =>
-                o.CreatedAt >= start && o.CreatedAt <= end);
-            var orderList = orders.ToList();
+            // Get all orders first, then filter
+            var allOrders = await _orderRepository.GetAllAsync();
+            var orderList = hasDateFilter
+                ? allOrders.Where(o => o.CreatedAt >= start && o.CreatedAt <= end).ToList()
+                : allOrders.ToList();
 
-            // Get completed payments for revenue calculation
-            var completedPayments = await _paymentRepository.SearchAsync(p =>
-                p.PaymentStatus != null && p.PaymentStatus.ToLower() == "completed" &&
-                p.PaidAt >= start && p.PaidAt <= end);
+            // Get all payments, then filter
+            var allPayments = await _paymentRepository.GetAllAsync();
+            var filteredPayments = hasDateFilter
+                ? allPayments.Where(p => p.PaidAt >= start && p.PaidAt <= end).ToList()
+                : allPayments.ToList();
+            var completedPayments = filteredPayments
+                .Where(p => p.PaymentStatus != null && 
+                            p.PaymentStatus.Equals("completed", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
-            // Get customers
-            var customers = await _userRepository.SearchAsync(u =>
-                u.Role != null && u.Role.ToLower() == "customer" &&
-                u.CreatedAt >= start && u.CreatedAt <= end);
+            // Get all users, then filter
+            var allUsers = await _userRepository.GetAllAsync();
+            var filteredUsers = hasDateFilter
+                ? allUsers.Where(u => u.CreatedAt >= start && u.CreatedAt <= end).ToList()
+                : allUsers.ToList();
+            var customers = filteredUsers
+                .Where(u => u.Role != null && u.Role.Equals("customer", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
-            // Get preorders
-            var preorders = await _preorderRepository.SearchAsync(p =>
-                p.CreatedAt >= start && p.CreatedAt <= end);
+            // Get all preorders, then filter
+            var allPreorders = await _preorderRepository.GetAllAsync();
+            var preorderList = hasDateFilter
+                ? allPreorders.Where(p => p.CreatedAt >= start && p.CreatedAt <= end).ToList()
+                : allPreorders.ToList();
 
-            // Get complaints
-            var complaints = await _complaintRepository.SearchAsync(c =>
-                c.CreatedAt >= start && c.CreatedAt <= end);
+            // Get all complaints, then filter
+            var allComplaints = await _complaintRepository.GetAllAsync();
+            var complaintList = hasDateFilter
+                ? allComplaints.Where(c => c.CreatedAt >= start && c.CreatedAt <= end).ToList()
+                : allComplaints.ToList();
 
             var totalRevenue = completedPayments.Sum(p => p.Amount ?? 0);
             var totalOrders = orderList.Count;
@@ -133,17 +153,17 @@ namespace Services.GlassesService
             {
                 TotalOrders = totalOrders,
                 TotalRevenue = totalRevenue,
-                TotalCustomers = customers.Count(),
-                PendingOrders = orderList.Count(o => o.Status?.ToLower() == "pending"),
-                ConfirmedOrders = orderList.Count(o => o.Status?.ToLower() == "confirmed"),
-                ProcessingOrders = orderList.Count(o => o.Status?.ToLower() == "processing"),
-                ShippedOrders = orderList.Count(o => o.Status?.ToLower() == "shipped"),
-                DeliveredOrders = orderList.Count(o => o.Status?.ToLower() == "delivered"),
-                CancelledOrders = orderList.Count(o => o.Status?.ToLower() == "cancelled"),
+                TotalCustomers = customers.Count,
+                PendingOrders = orderList.Count(o => "pending".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
+                ConfirmedOrders = orderList.Count(o => "confirmed".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
+                ProcessingOrders = orderList.Count(o => "processing".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
+                ShippedOrders = orderList.Count(o => "shipped".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
+                DeliveredOrders = orderList.Count(o => "delivered".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
+                CancelledOrders = orderList.Count(o => "cancelled".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
                 AverageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0,
-                TotalPreorders = preorders.Count(),
-                TotalComplaints = complaints.Count(),
-                PendingComplaints = complaints.Count(c => c.Status?.ToLower() == "pending")
+                TotalPreorders = preorderList.Count,
+                TotalComplaints = complaintList.Count,
+                PendingComplaints = complaintList.Count(c => "pending".Equals(c.Status, StringComparison.OrdinalIgnoreCase))
             };
         }
 
@@ -153,9 +173,14 @@ namespace Services.GlassesService
 
         public async Task<List<RevenueReport>> GetDailyRevenueAsync(DateTime startDate, DateTime endDate)
         {
-            var completedPayments = await _paymentRepository.SearchAsync(p =>
-                p.PaymentStatus != null && p.PaymentStatus.ToLower() == "completed" &&
-                p.PaidAt >= startDate && p.PaidAt <= endDate);
+            // Get all payments and filter in memory to avoid EF Core translation issues
+            var allPayments = await _paymentRepository.GetAllAsync();
+            
+            var completedPayments = allPayments
+                .Where(p => p.PaymentStatus != null && 
+                            p.PaymentStatus.Equals("completed", StringComparison.OrdinalIgnoreCase) &&
+                            p.PaidAt >= startDate && p.PaidAt <= endDate)
+                .ToList();
 
             var dailyRevenue = completedPayments
                 .Where(p => p.PaidAt.HasValue)
@@ -185,9 +210,14 @@ namespace Services.GlassesService
             var startDate = new DateTime(year, 1, 1);
             var endDate = new DateTime(year, 12, 31, 23, 59, 59);
 
-            var completedPayments = await _paymentRepository.SearchAsync(p =>
-                p.PaymentStatus != null && p.PaymentStatus.ToLower() == "completed" &&
-                p.PaidAt >= startDate && p.PaidAt <= endDate);
+            // Get all payments and filter in memory
+            var allPayments = await _paymentRepository.GetAllAsync();
+            
+            var completedPayments = allPayments
+                .Where(p => p.PaymentStatus != null && 
+                            p.PaymentStatus.Equals("completed", StringComparison.OrdinalIgnoreCase) &&
+                            p.PaidAt >= startDate && p.PaidAt <= endDate)
+                .ToList();
 
             var monthlyRevenue = completedPayments
                 .Where(p => p.PaidAt.HasValue)
@@ -219,21 +249,32 @@ namespace Services.GlassesService
 
         public async Task<List<PopularFrame>> GetPopularFramesAsync(int limit = 10, DateTime? startDate = null, DateTime? endDate = null)
         {
-            var start = startDate ?? DateTime.MinValue;
-            var end = endDate ?? DateTime.MaxValue;
+            var hasDateFilter = startDate.HasValue || endDate.HasValue;
+            var start = startDate ?? SqlMinDate;
+            var end = endDate ?? SqlMaxDate;
 
-            // Get order items with frame info
-            var orderItems = await _orderItemRepository.SearchAsyncInclude(
-                oi => oi.Order != null && 
-                      oi.Order.CreatedAt >= start && 
-                      oi.Order.CreatedAt <= end &&
-                      oi.Order.Status != null && 
-                      oi.Order.Status.ToLower() != "cancelled",
+            // Get order items with frame and order info
+            var orderItems = await _orderItemRepository.GetAllAsyncInclude(
                 oi => oi.Frame,
                 oi => oi.Order
             );
 
-            var popularFrames = orderItems
+            // Filter in memory
+            var filteredOrderItems = orderItems
+                .Where(oi => oi.Order != null && 
+                             oi.Order.Status != null && 
+                             !"cancelled".Equals(oi.Order.Status, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Apply date filter if specified
+            if (hasDateFilter)
+            {
+                filteredOrderItems = filteredOrderItems
+                    .Where(oi => oi.Order!.CreatedAt >= start && oi.Order.CreatedAt <= end)
+                    .ToList();
+            }
+
+            var popularFrames = filteredOrderItems
                 .Where(oi => oi.FrameId.HasValue && oi.Frame != null)
                 .GroupBy(oi => oi.FrameId!.Value)
                 .Select(g => new PopularFrame
@@ -262,15 +303,18 @@ namespace Services.GlassesService
             var weekStart = today.AddDays(-(int)today.DayOfWeek);
             var monthStart = new DateTime(today.Year, today.Month, 1);
 
-            // Get orders
-            var allOrders = await _orderRepository.SearchAsync(o =>
-                o.Status != null && o.Status.ToLower() != "cancelled");
-            var orderList = allOrders.ToList();
+            // Get all orders and filter in memory
+            var allOrders = await _orderRepository.GetAllAsync();
+            var orderList = allOrders
+                .Where(o => o.Status != null && !"cancelled".Equals(o.Status, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
-            // Get completed payments
-            var completedPayments = await _paymentRepository.SearchAsync(p =>
-                p.PaymentStatus != null && p.PaymentStatus.ToLower() == "completed");
-            var paymentList = completedPayments.ToList();
+            // Get all payments and filter in memory
+            var allPayments = await _paymentRepository.GetAllAsync();
+            var paymentList = allPayments
+                .Where(p => p.PaymentStatus != null && 
+                            p.PaymentStatus.Equals("completed", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             // Calculate summaries
             var todayOrders = orderList.Where(o => o.CreatedAt?.Date == today).ToList();

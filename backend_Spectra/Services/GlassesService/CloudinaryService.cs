@@ -21,11 +21,15 @@ namespace Services.GlassesService
         Task<CloudinaryUploadResult> UploadImageAsync(byte[] fileBytes, string fileName, string folder = "products");
         Task<bool> DeleteImageAsync(string publicId);
         string GetPublicIdFromUrl(string url);
+        bool IsConfigured { get; }
     }
 
     public class CloudinaryService : ICloudinaryService
     {
-        private readonly Cloudinary _cloudinary;
+        private readonly Cloudinary? _cloudinary;
+        private readonly bool _isConfigured;
+
+        public bool IsConfigured => _isConfigured;
 
         public CloudinaryService(IConfiguration configuration)
         {
@@ -34,18 +38,36 @@ namespace Services.GlassesService
             var apiKey = cloudinaryConfig["ApiKey"];
             var apiSecret = cloudinaryConfig["ApiSecret"];
 
-            if (string.IsNullOrEmpty(cloudName) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiSecret))
+            // Check if configuration is properly set (not placeholder values)
+            if (string.IsNullOrEmpty(cloudName) || 
+                string.IsNullOrEmpty(apiKey) || 
+                string.IsNullOrEmpty(apiSecret) ||
+                cloudName == "YOUR_CLOUD_NAME" ||
+                apiKey == "YOUR_API_KEY" ||
+                apiSecret == "YOUR_API_SECRET")
             {
-                throw new InvalidOperationException("Cloudinary configuration is missing. Please check appsettings.json");
+                _isConfigured = false;
+                _cloudinary = null;
+                return;
             }
 
             var account = new Account(cloudName, apiKey, apiSecret);
             _cloudinary = new Cloudinary(account);
             _cloudinary.Api.Secure = true;
+            _isConfigured = true;
         }
 
         public async Task<CloudinaryUploadResult> UploadImageAsync(Stream fileStream, string fileName, string folder = "products")
         {
+            if (!_isConfigured || _cloudinary == null)
+            {
+                return new CloudinaryUploadResult
+                {
+                    Success = false,
+                    Error = "Cloudinary is not configured. Please set up Cloudinary credentials in appsettings.json"
+                };
+            }
+
             try
             {
                 var uploadParams = new ImageUploadParams
@@ -96,6 +118,11 @@ namespace Services.GlassesService
 
         public async Task<bool> DeleteImageAsync(string publicId)
         {
+            if (!_isConfigured || _cloudinary == null)
+            {
+                return false;
+            }
+
             try
             {
                 var deleteParams = new DeletionParams(publicId);

@@ -103,17 +103,63 @@ namespace Services.GlassesService
             // Create the order
             var createdOrder = await _orderRepository.CreateAsync(order);
 
-            // Create order items
+            // Create order items and deduct stock
             foreach (var item in orderItems)
             {
                 item.OrderItemId = Guid.NewGuid();
                 item.OrderId = createdOrder.OrderId;
                 item.OrderPrice = await CalculateItemPriceAsync(item);
                 await _orderItemRepository.CreateAsync(item);
+
+                // Deduct stock for each frame
+                if (item.FrameId.HasValue)
+                {
+                    await DeductFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
+                }
             }
 
             // Return order with items
             return await GetOrderByIdWithDetailsAsync(createdOrder.OrderId) ?? createdOrder;
+        }
+
+        private async Task DeductFrameStockAsync(Guid frameId, int quantity)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            
+            if (frame != null)
+            {
+                var currentStock = frame.StockQuantity ?? 0;
+                frame.StockQuantity = Math.Max(0, currentStock - quantity);
+                
+                // Auto-update status if out of stock
+                if (frame.StockQuantity <= 0)
+                {
+                    frame.Status = "out_of_stock";
+                }
+                
+                await _frameRepository.UpdateAsync(frame);
+            }
+        }
+
+        private async Task RestoreFrameStockAsync(Guid frameId, int quantity)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            
+            if (frame != null)
+            {
+                var currentStock = frame.StockQuantity ?? 0;
+                frame.StockQuantity = currentStock + quantity;
+                
+                // Auto-update status if back in stock
+                if (frame.StockQuantity > 0 && frame.Status?.ToLower() == "out_of_stock")
+                {
+                    frame.Status = "available";
+                }
+                
+                await _frameRepository.UpdateAsync(frame);
+            }
         }
 
         public async Task<OrderValidationResult> ValidateOrderItemsAsync(List<OrderItem> orderItems, Guid userId)
@@ -146,6 +192,23 @@ namespace Services.GlassesService
                     {
                         result.IsValid = false;
                         result.Errors.Add($"Frame '{frame.FrameName}' is not available");
+                        continue;
+                    }
+
+                    // Validate stock availability
+                    var requestedQuantity = item.Quantity ?? 1;
+                    var availableStock = frame.StockQuantity ?? 0;
+                    if (availableStock < requestedQuantity)
+                    {
+                        result.IsValid = false;
+                        if (availableStock <= 0)
+                        {
+                            result.Errors.Add($"Frame '{frame.FrameName}' is out of stock. Please use Preorder instead.");
+                        }
+                        else
+                        {
+                            result.Errors.Add($"Frame '{frame.FrameName}' only has {availableStock} in stock, but {requestedQuantity} requested");
+                        }
                         continue;
                     }
 
@@ -374,6 +437,23 @@ namespace Services.GlassesService
             if (newStatus == OrderStatus.Delivered)
             {
                 order.ArrivalDate = DateTime.UtcNow;
+            }
+
+            // Restore stock when order is cancelled
+            if (newStatus == OrderStatus.Cancelled)
+            {
+                // Get order items to restore stock
+                var orderWithItems = await GetOrderByIdWithDetailsAsync(orderId);
+                if (orderWithItems != null)
+                {
+                    foreach (var item in orderWithItems.OrderItems)
+                    {
+                        if (item.FrameId.HasValue)
+                        {
+                            await RestoreFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
+                        }
+                    }
+                }
             }
 
             return await _orderRepository.UpdateAsync(order);

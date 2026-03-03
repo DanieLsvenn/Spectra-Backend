@@ -1,4 +1,7 @@
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Unicode;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -9,12 +12,21 @@ using Services.GlassesService;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure JSON serialization options with Unicode support
+var jsonSerializerOptions = new JsonSerializerOptions
+{
+    ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
+    Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+};
+
 // Add services to the container.
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        // Enable Unicode support for Vietnamese and other languages
+        options.JsonSerializerOptions.Encoder = JavaScriptEncoder.Create(UnicodeRanges.All);
     });
 // Add HttpClient for Firebase authentication
 builder.Services.AddHttpClient();
@@ -113,6 +125,19 @@ builder.Services.AddAuthorization();
 // Configure CORS
 builder.Services.AddCors(options =>
 {
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://localhost:5173",
+                "https://localhost:3000"
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+    
     options.AddPolicy("AllowAll", policy =>
     {
         policy.AllowAnyOrigin()
@@ -130,9 +155,35 @@ var app = builder.Build();
     app.UseSwaggerUI();
 //}
 
+// Global exception handler to ensure CORS headers are returned even on errors
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        
+        var error = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (error != null)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(error.Error, "An unhandled exception occurred: {Message}", error.Error.Message);
+            
+            await context.Response.WriteAsJsonAsync(new
+            {
+                ErrorCode = "INTERNAL_ERROR",
+                Message = app.Environment.IsDevelopment() 
+                    ? error.Error.Message 
+                    : "An internal server error occurred"
+            }, jsonSerializerOptions);
+        }
+    });
+});
+
 app.UseHttpsRedirection();
 
-app.UseCors("AllowAll");
+// CORS must be before Authentication/Authorization
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

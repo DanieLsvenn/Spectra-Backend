@@ -145,6 +145,14 @@ public partial class Context : DbContext
                 .IsUnicode(false)
                 .HasColumnName("status");
             entity.Property(e => e.TempleLength).HasColumnName("templeLength");
+            
+            // Inventory columns - ignore if not exists in database yet
+            entity.Property(e => e.StockQuantity)
+                .HasColumnName("stockQuantity")
+                .IsRequired(false);
+            entity.Property(e => e.ReorderLevel)
+                .HasColumnName("reorderLevel")
+                .IsRequired(false);
         });
 
         modelBuilder.Entity<FrameMedium>(entity =>

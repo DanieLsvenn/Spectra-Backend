@@ -33,6 +33,16 @@ public partial class Frame
 
     public string Status { get; set; }
 
+    /// <summary>
+    /// Current stock quantity available for sale
+    /// </summary>
+    public int? StockQuantity { get; set; }
+
+    /// <summary>
+    /// Minimum stock level before reorder/preorder is triggered
+    /// </summary>
+    public int? ReorderLevel { get; set; }
+
     public virtual ICollection<FrameMedium> FrameMedia { get; set; } = new List<FrameMedium>();
 
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();

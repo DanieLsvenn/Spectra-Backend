@@ -148,7 +148,9 @@ namespace SpectraGlasses.WebAPI.Controllers
                 TempleLength = request.TempleLength,
                 Shape = request.Shape,
                 Size = request.Size,
-                BasePrice = request.BasePrice
+                BasePrice = request.BasePrice,
+                StockQuantity = request.StockQuantity ?? 0,
+                ReorderLevel = request.ReorderLevel ?? 5
             };
 
             var createdFrame = await _frameService.CreateFrameAsync(frame);
@@ -219,7 +221,9 @@ namespace SpectraGlasses.WebAPI.Controllers
                 Shape = request.Shape,
                 Size = request.Size,
                 BasePrice = request.BasePrice,
-                Status = request.Status
+                Status = request.Status,
+                StockQuantity = request.StockQuantity,
+                ReorderLevel = request.ReorderLevel
             };
 
             var result = await _frameService.UpdateFrameAsync(id, updatedFrame);
@@ -261,6 +265,74 @@ namespace SpectraGlasses.WebAPI.Controllers
             }
 
             return NoContent();
+        }
+
+        /// <summary>
+        /// Gets frames with low stock (Manager only)
+        /// </summary>
+        [HttpGet("inventory/low-stock")]
+        [Authorize(Roles = "manager,admin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> GetLowStockFrames()
+        {
+            var frames = await _frameService.GetLowStockFramesAsync();
+            return Ok(frames);
+        }
+
+        /// <summary>
+        /// Gets frames that are out of stock (Manager only)
+        /// </summary>
+        [HttpGet("inventory/out-of-stock")]
+        [Authorize(Roles = "manager,admin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> GetOutOfStockFrames()
+        {
+            var frames = await _frameService.GetOutOfStockFramesAsync();
+            return Ok(frames);
+        }
+
+        /// <summary>
+        /// Updates stock quantity for a frame (Manager only)
+        /// </summary>
+        [HttpPatch("{id:guid}/inventory")]
+        [Authorize(Roles = "manager,admin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> UpdateStock(Guid id, [FromBody] UpdateStockRequest request)
+        {
+            if (request.Quantity < 0)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Stock quantity cannot be negative"
+                });
+            }
+
+            var frame = await _frameService.GetFrameByIdForManagerAsync(id);
+            if (frame == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    ErrorCode = "FRAME_NOT_FOUND",
+                    Message = "Frame not found"
+                });
+            }
+
+            var updatedFrame = new Frame
+            {
+                StockQuantity = request.Quantity,
+                ReorderLevel = request.ReorderLevel
+            };
+
+            var result = await _frameService.UpdateFrameAsync(id, updatedFrame);
+            return Ok(result);
         }
 
         #endregion
