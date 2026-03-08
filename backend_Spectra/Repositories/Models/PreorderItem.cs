@@ -19,11 +19,15 @@ public partial class PreorderItem
 
     public Guid? LensTypeId { get; set; }
 
+    public Guid? LensIndexId { get; set; }
+
     public int? Quantity { get; set; }
 
-    public double? PreorderPrice { get; set; }
+    public double? UnitPrice { get; set; }
 
-    public string SelectedColor { get; set; }
+    public Guid? SelectedColorId { get; set; }
+
+    public string SelectedSize { get; set; }
 
     public virtual LensFeature Feature { get; set; }
 
@@ -31,7 +35,11 @@ public partial class PreorderItem
 
     public virtual LensType LensType { get; set; }
 
+    public virtual LensIndex LensIndex { get; set; }
+
     public virtual Preorder Preorder { get; set; }
 
     public virtual Prescription Prescription { get; set; }
+
+    public virtual Color SelectedColor { get; set; }
 }

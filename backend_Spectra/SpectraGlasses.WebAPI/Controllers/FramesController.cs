@@ -139,9 +139,8 @@ namespace SpectraGlasses.WebAPI.Controllers
             var frame = new Frame
             {
                 FrameName = request.FrameName,
-                Brand = request.Brand,
-                Color = request.Color,
-                Material = request.Material,
+                BrandId = request.BrandId,
+                MaterialId = request.MaterialId,
                 LensWidth = request.LensWidth,
                 BridgeWidth = request.BridgeWidth,
                 FrameWidth = request.FrameWidth,
@@ -211,9 +210,8 @@ namespace SpectraGlasses.WebAPI.Controllers
             var updatedFrame = new Frame
             {
                 FrameName = request.FrameName,
-                Brand = request.Brand,
-                Color = request.Color,
-                Material = request.Material,
+                BrandId = request.BrandId,
+                MaterialId = request.MaterialId,
                 LensWidth = request.LensWidth,
                 BridgeWidth = request.BridgeWidth,
                 FrameWidth = request.FrameWidth,

@@ -22,6 +22,7 @@ namespace Services.GlassesService
         // Read operations
         Task<FrameMedium?> GetMediaByIdAsync(Guid mediaId);
         Task<List<FrameMedium>> GetMediaByFrameIdAsync(Guid frameId);
+        Task<List<FrameMedium>> GetMediaByFrameAndColorAsync(Guid frameId, Guid colorId);
 
         // Update operations
         Task<FrameMedium?> UpdateMediaAsync(Guid mediaId, FrameMedium updatedMedia);
@@ -120,13 +121,26 @@ namespace Services.GlassesService
 
         public async Task<FrameMedium?> GetMediaByIdAsync(Guid mediaId)
         {
-            var mediaList = await _mediaRepository.SearchAsync(m => m.MediaId == mediaId);
+            var mediaList = await _mediaRepository.SearchAsyncInclude(
+                m => m.MediaId == mediaId,
+                m => m.Color);
             return mediaList.FirstOrDefault();
         }
 
         public async Task<List<FrameMedium>> GetMediaByFrameIdAsync(Guid frameId)
         {
-            var mediaList = await _mediaRepository.SearchAsync(m => m.FrameId == frameId);
+            var mediaList = await _mediaRepository.SearchAsyncInclude(
+                m => m.FrameId == frameId,
+                m => m.Color);
+            return mediaList.ToList();
+        }
+
+        public async Task<List<FrameMedium>> GetMediaByFrameAndColorAsync(Guid frameId, Guid colorId)
+        {
+            // Return images for the specific color + images with no color (generic/shared images)
+            var mediaList = await _mediaRepository.SearchAsyncInclude(
+                m => m.FrameId == frameId && (m.ColorId == colorId || m.ColorId == null),
+                m => m.Color);
             return mediaList.ToList();
         }
 
@@ -149,6 +163,9 @@ namespace Services.GlassesService
 
             if (!string.IsNullOrEmpty(updatedMedia.MediaType))
                 existingMedia.MediaType = updatedMedia.MediaType;
+
+            // Allow setting or clearing color association
+            existingMedia.ColorId = updatedMedia.ColorId;
 
             return await _mediaRepository.UpdateAsync(existingMedia);
         }

@@ -37,9 +37,8 @@
     public class CreateFrameRequest
     {
         public string FrameName { get; set; } = string.Empty;
-        public string? Brand { get; set; }
-        public string? Color { get; set; }
-        public string? Material { get; set; }
+        public Guid? BrandId { get; set; }
+        public Guid? MaterialId { get; set; }
         public int? LensWidth { get; set; }
         public int? BridgeWidth { get; set; }
         public int? FrameWidth { get; set; }
@@ -54,9 +53,8 @@
     public class UpdateFrameRequest
     {
         public string? FrameName { get; set; }
-        public string? Brand { get; set; }
-        public string? Color { get; set; }
-        public string? Material { get; set; }
+        public Guid? BrandId { get; set; }
+        public Guid? MaterialId { get; set; }
         public int? LensWidth { get; set; }
         public int? BridgeWidth { get; set; }
         public int? FrameWidth { get; set; }
@@ -87,14 +85,14 @@
     {
         public string LensSpecification { get; set; } = string.Empty;
         public bool? RequiresPrescription { get; set; }
-        public double? ExtraPrice { get; set; }
+        public double? BasePrice { get; set; }
     }
 
     public class UpdateLensTypeRequest
     {
         public string? LensSpecification { get; set; }
         public bool? RequiresPrescription { get; set; }
-        public double? ExtraPrice { get; set; }
+        public double? BasePrice { get; set; }
     }
 
     #endregion
@@ -103,14 +101,12 @@
 
     public class CreateLensFeatureRequest
     {
-        public double? LensIndex { get; set; }
         public string FeatureSpecification { get; set; } = string.Empty;
         public double? ExtraPrice { get; set; }
     }
 
     public class UpdateLensFeatureRequest
     {
-        public double? LensIndex { get; set; }
         public string? FeatureSpecification { get; set; }
         public double? ExtraPrice { get; set; }
     }
@@ -120,6 +116,7 @@
         public double BasePrice { get; set; }
         public Guid? LensFeatureId { get; set; }
         public Guid? LensTypeId { get; set; }
+        public Guid? LensIndexId { get; set; }
     }
 
     public class PriceCalculationResponse
@@ -127,6 +124,7 @@
         public double BasePrice { get; set; }
         public double FeatureExtraPrice { get; set; }
         public double LensTypeExtraPrice { get; set; }
+        public double LensIndexExtraPrice { get; set; }
         public double TotalPrice { get; set; }
     }
 
@@ -137,6 +135,7 @@
     public class CreateOrderRequest
     {
         public string ShippingAddress { get; set; } = string.Empty;
+        public string? ShippingMethod { get; set; }
         public List<CreateOrderItemRequest> Items { get; set; } = new();
     }
 
@@ -145,9 +144,11 @@
         public Guid FrameId { get; set; }
         public Guid? LensTypeId { get; set; }
         public Guid? FeatureId { get; set; }
+        public Guid? LensIndexId { get; set; }
         public Guid? PrescriptionId { get; set; }
         public int Quantity { get; set; } = 1;
-        public string? SelectedColor { get; set; }
+        public Guid? SelectedColorId { get; set; }
+        public string? SelectedSize { get; set; }
     }
 
     public class UpdateOrderStatusRequest
@@ -172,6 +173,7 @@
 
     public class CreatePreorderRequest
     {
+        public Guid? CampaignId { get; set; }
         public DateTime? ExpectedDate { get; set; }
         public List<CreatePreorderItemRequest> Items { get; set; } = new();
     }
@@ -181,9 +183,11 @@
         public Guid FrameId { get; set; }
         public Guid? LensTypeId { get; set; }
         public Guid? FeatureId { get; set; }
+        public Guid? LensIndexId { get; set; }
         public Guid? PrescriptionId { get; set; }
         public int Quantity { get; set; } = 1;
-        public string? SelectedColor { get; set; }
+        public Guid? SelectedColorId { get; set; }
+        public string? SelectedSize { get; set; }
     }
 
     public class ConvertPreorderRequest
@@ -399,7 +403,8 @@
     {
         public Guid FrameId { get; set; }
         public string MediaUrl { get; set; } = string.Empty;
-        public string MediaType { get; set; } = "image"; // image, video, thumbnail, gallery
+        public string MediaType { get; set; } = "image";
+        public Guid? ColorId { get; set; }
     }
 
     public class AddMultipleFrameMediaRequest
@@ -412,12 +417,14 @@
     {
         public string MediaUrl { get; set; } = string.Empty;
         public string MediaType { get; set; } = "image";
+        public Guid? ColorId { get; set; }
     }
 
     public class UpdateFrameMediaRequest
     {
         public string? MediaUrl { get; set; }
         public string? MediaType { get; set; }
+        public Guid? ColorId { get; set; }
     }
 
     public class FrameMediaResponse
@@ -426,6 +433,9 @@
         public Guid? FrameId { get; set; }
         public string? MediaUrl { get; set; }
         public string? MediaType { get; set; }
+        public Guid? ColorId { get; set; }
+        public string? ColorName { get; set; }
+        public string? HexCode { get; set; }
     }
 
     public class ImageUploadResponse
@@ -442,7 +452,146 @@
         public Guid? FrameId { get; set; }
         public string? MediaUrl { get; set; }
         public string? MediaType { get; set; }
+        public Guid? ColorId { get; set; }
         public string? PublicId { get; set; }
+    }
+
+    #endregion
+
+    #region Brand Models
+
+    public class CreateBrandRequest
+    {
+        public string BrandName { get; set; } = string.Empty;
+    }
+
+    public class UpdateBrandRequest
+    {
+        public string? BrandName { get; set; }
+    }
+
+    #endregion
+
+    #region Material Models
+
+    public class CreateMaterialRequest
+    {
+        public string MaterialName { get; set; } = string.Empty;
+    }
+
+    public class UpdateMaterialRequest
+    {
+        public string? MaterialName { get; set; }
+    }
+
+    #endregion
+
+    #region Color Models
+
+    public class CreateColorRequest
+    {
+        public string ColorName { get; set; } = string.Empty;
+        public string? HexCode { get; set; }
+    }
+
+    public class UpdateColorRequest
+    {
+        public string? ColorName { get; set; }
+        public string? HexCode { get; set; }
+    }
+
+    #endregion
+
+    #region LensIndex Models
+
+    public class CreateLensIndexRequest
+    {
+        public double IndexValue { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public double AdditionalPrice { get; set; }
+        public double? MinPrescription { get; set; }
+        public double? MaxPrescription { get; set; }
+        public Guid? BrandId { get; set; }
+        public Guid? ColorId { get; set; }
+    }
+
+    public class UpdateLensIndexRequest
+    {
+        public double? IndexValue { get; set; }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public double? AdditionalPrice { get; set; }
+        public double? MinPrescription { get; set; }
+        public double? MaxPrescription { get; set; }
+        public Guid? BrandId { get; set; }
+        public Guid? ColorId { get; set; }
+    }
+
+    #endregion
+
+    #region ProductReview Models
+
+    public class CreateReviewRequest
+    {
+        public Guid FrameId { get; set; }
+        public Guid? OrderItemId { get; set; }
+        public int Rating { get; set; }
+        public string? Title { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    public class UpdateReviewRequest
+    {
+        public int? Rating { get; set; }
+        public string? Title { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    #endregion
+
+    #region PreorderCampaign Models
+
+    public class CreateCampaignRequest
+    {
+        public string CampaignName { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public int? MaxSlots { get; set; }
+        public DateTime? EstimatedDeliveryDate { get; set; }
+        public List<CampaignFrameRequest> Frames { get; set; } = new();
+    }
+
+    public class CampaignFrameRequest
+    {
+        public Guid FrameId { get; set; }
+        public double? CampaignPrice { get; set; }
+        public int MaxQuantityPerOrder { get; set; } = 2;
+    }
+
+    public class UpdateCampaignRequest
+    {
+        public string? CampaignName { get; set; }
+        public string? Description { get; set; }
+        public int? MaxSlots { get; set; }
+        public DateTime? EstimatedDeliveryDate { get; set; }
+    }
+
+    #endregion
+
+    #region Shipping Models
+
+    public class CalculateShippingRequest
+    {
+        public string ShippingMethod { get; set; } = "standard";
+        public double OrderSubtotal { get; set; }
+    }
+
+    public class AssignTrackingRequest
+    {
+        public string TrackingNumber { get; set; } = string.Empty;
+        public string Carrier { get; set; } = string.Empty;
     }
 
     #endregion

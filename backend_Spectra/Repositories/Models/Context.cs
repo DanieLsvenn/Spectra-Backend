@@ -18,6 +18,18 @@ public partial class Context : DbContext
     {
     }
 
+    public virtual DbSet<Brand> Brands { get; set; }
+
+    public virtual DbSet<Material> Materials { get; set; }
+
+    public virtual DbSet<Color> Colors { get; set; }
+
+    public virtual DbSet<FrameColor> FrameColors { get; set; }
+
+    public virtual DbSet<FrameSize> FrameSizes { get; set; }
+
+    public virtual DbSet<LensIndex> LensIndices { get; set; }
+
     public virtual DbSet<ComplaintRequest> ComplaintRequests { get; set; }
 
     public virtual DbSet<Frame> Frames { get; set; }
@@ -42,6 +54,14 @@ public partial class Context : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
+    public virtual DbSet<ProductReview> ProductReviews { get; set; }
+
+    public virtual DbSet<PreorderCampaign> PreorderCampaigns { get; set; }
+
+    public virtual DbSet<CampaignFrame> CampaignFrames { get; set; }
+
+    public virtual DbSet<PreorderStatusLog> PreorderStatusLogs { get; set; }
+
     private string GetConnectionString()
     {
         IConfiguration configuration = new ConfigurationBuilder()
@@ -57,12 +77,164 @@ public partial class Context : DbContext
             optionsBuilder.UseSqlServer(GetConnectionString());
         }
     }
-//    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-//        => optionsBuilder.UseSqlServer("Data Source=LAPTOP-B9R8VFQL;Initial Catalog=GlassesECommerce;Integrated Security=True;Encrypt=False");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Brand>(entity =>
+        {
+            entity.HasKey(e => e.BrandId);
+
+            entity.ToTable("BRAND");
+
+            entity.Property(e => e.BrandId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("brandId");
+            entity.Property(e => e.BrandName)
+                .IsRequired()
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("brandName");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("active")
+                .HasColumnName("status");
+        });
+
+        modelBuilder.Entity<Material>(entity =>
+        {
+            entity.HasKey(e => e.MaterialId);
+
+            entity.ToTable("MATERIAL");
+
+            entity.Property(e => e.MaterialId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("materialId");
+            entity.Property(e => e.MaterialName)
+                .IsRequired()
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("materialName");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("active")
+                .HasColumnName("status");
+        });
+
+        modelBuilder.Entity<Color>(entity =>
+        {
+            entity.HasKey(e => e.ColorId);
+
+            entity.ToTable("COLOR");
+
+            entity.Property(e => e.ColorId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("colorId");
+            entity.Property(e => e.ColorName)
+                .IsRequired()
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("colorName");
+            entity.Property(e => e.HexCode)
+                .HasMaxLength(7)
+                .IsUnicode(false)
+                .HasColumnName("hexCode");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("active")
+                .HasColumnName("status");
+        });
+
+        modelBuilder.Entity<FrameColor>(entity =>
+        {
+            entity.HasKey(e => e.FrameColorId);
+
+            entity.ToTable("FRAME_COLOR");
+
+            entity.Property(e => e.FrameColorId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("frameColorId");
+            entity.Property(e => e.FrameId).HasColumnName("frameId");
+            entity.Property(e => e.ColorId).HasColumnName("colorId");
+            entity.Property(e => e.IsDefault)
+                .HasDefaultValue(false)
+                .HasColumnName("isDefault");
+
+            entity.HasOne(d => d.Frame).WithMany(p => p.FrameColors)
+                .HasForeignKey(d => d.FrameId)
+                .HasConstraintName("FK_FRAME_COLOR_FRAME");
+
+            entity.HasOne(d => d.Color).WithMany(p => p.FrameColors)
+                .HasForeignKey(d => d.ColorId)
+                .HasConstraintName("FK_FRAME_COLOR_COLOR");
+        });
+
+        modelBuilder.Entity<FrameSize>(entity =>
+        {
+            entity.HasKey(e => e.FrameSizeId);
+
+            entity.ToTable("FRAME_SIZE");
+
+            entity.Property(e => e.FrameSizeId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("frameSizeId");
+            entity.Property(e => e.FrameId).HasColumnName("frameId");
+            entity.Property(e => e.Size)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("size");
+            entity.Property(e => e.IsDefault)
+                .HasDefaultValue(false)
+                .HasColumnName("isDefault");
+
+            entity.HasOne(d => d.Frame).WithMany(p => p.FrameSizes)
+                .HasForeignKey(d => d.FrameId)
+                .HasConstraintName("FK_FRAME_SIZE_FRAME");
+        });
+
+        modelBuilder.Entity<LensIndex>(entity =>
+        {
+            entity.HasKey(e => e.LensIndexId);
+
+            entity.ToTable("LENS_INDEX");
+
+            entity.Property(e => e.LensIndexId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("lensIndexId");
+            entity.Property(e => e.IndexValue).HasColumnName("indexValue");
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("name");
+            entity.Property(e => e.Description)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasColumnName("description");
+            entity.Property(e => e.AdditionalPrice)
+                .HasDefaultValue(0.0)
+                .HasColumnName("additionalPrice");
+            entity.Property(e => e.MinPrescription).HasColumnName("minPrescription");
+            entity.Property(e => e.MaxPrescription).HasColumnName("maxPrescription");
+            entity.Property(e => e.BrandId).HasColumnName("brandId");
+            entity.Property(e => e.ColorId).HasColumnName("colorId");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("active")
+                .HasColumnName("status");
+
+            entity.HasOne(d => d.Brand).WithMany(p => p.LensIndices)
+                .HasForeignKey(d => d.BrandId)
+                .HasConstraintName("FK_LENS_INDEX_BRAND");
+
+            entity.HasOne(d => d.Color).WithMany(p => p.LensIndices)
+                .HasForeignKey(d => d.ColorId)
+                .HasConstraintName("FK_LENS_INDEX_COLOR");
+        });
+
         modelBuilder.Entity<ComplaintRequest>(entity =>
         {
             entity.HasKey(e => e.RequestId).HasName("PK__COMPLAIN__E3C5DE315445ED79");
@@ -93,6 +265,14 @@ public partial class Context : DbContext
                 .IsUnicode(false)
                 .HasColumnName("status");
             entity.Property(e => e.UserId).HasColumnName("userId");
+            entity.Property(e => e.RefundAmount).HasColumnName("refundAmount");
+            entity.Property(e => e.ReturnTrackingNumber)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("returnTrackingNumber");
+            entity.Property(e => e.RefundedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("refundedAt");
 
             entity.HasOne(d => d.OrderItem).WithMany(p => p.ComplaintRequests)
                 .HasForeignKey(d => d.OrderItemId)
@@ -113,25 +293,15 @@ public partial class Context : DbContext
                 .HasDefaultValueSql("(newid())")
                 .HasColumnName("frameId");
             entity.Property(e => e.BasePrice).HasColumnName("basePrice");
-            entity.Property(e => e.Brand)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("brand");
+            entity.Property(e => e.BrandId).HasColumnName("brandId");
             entity.Property(e => e.BridgeWidth).HasColumnName("bridgeWidth");
-            entity.Property(e => e.Color)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("color");
+            entity.Property(e => e.MaterialId).HasColumnName("materialId");
             entity.Property(e => e.FrameName)
                 .HasMaxLength(100)
                 .IsUnicode(false)
                 .HasColumnName("frameName");
             entity.Property(e => e.FrameWidth).HasColumnName("frameWidth");
             entity.Property(e => e.LensWidth).HasColumnName("lensWidth");
-            entity.Property(e => e.Material)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("material");
             entity.Property(e => e.Shape)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -146,13 +316,21 @@ public partial class Context : DbContext
                 .HasColumnName("status");
             entity.Property(e => e.TempleLength).HasColumnName("templeLength");
             
-            // Inventory columns - ignore if not exists in database yet
+            // Inventory columns
             entity.Property(e => e.StockQuantity)
                 .HasColumnName("stockQuantity")
                 .IsRequired(false);
             entity.Property(e => e.ReorderLevel)
                 .HasColumnName("reorderLevel")
                 .IsRequired(false);
+
+            entity.HasOne(d => d.Brand).WithMany(p => p.Frames)
+                .HasForeignKey(d => d.BrandId)
+                .HasConstraintName("FK_FRAME_BRAND");
+
+            entity.HasOne(d => d.Material).WithMany(p => p.Frames)
+                .HasForeignKey(d => d.MaterialId)
+                .HasConstraintName("FK_FRAME_MATERIAL");
         });
 
         modelBuilder.Entity<FrameMedium>(entity =>
@@ -165,6 +343,7 @@ public partial class Context : DbContext
                 .HasDefaultValueSql("(newid())")
                 .HasColumnName("mediaId");
             entity.Property(e => e.FrameId).HasColumnName("frameId");
+            entity.Property(e => e.ColorId).HasColumnName("colorId");
             entity.Property(e => e.MediaType)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -177,6 +356,10 @@ public partial class Context : DbContext
             entity.HasOne(d => d.Frame).WithMany(p => p.FrameMedia)
                 .HasForeignKey(d => d.FrameId)
                 .HasConstraintName("FK__FRAME_MED__frame__49C3F6B7");
+
+            entity.HasOne(d => d.Color).WithMany()
+                .HasForeignKey(d => d.ColorId)
+                .HasConstraintName("FK_FRAME_MEDIA_COLOR");
         });
 
         modelBuilder.Entity<LensFeature>(entity =>
@@ -193,7 +376,6 @@ public partial class Context : DbContext
                 .HasMaxLength(200)
                 .IsUnicode(false)
                 .HasColumnName("featureSpecification");
-            entity.Property(e => e.LensIndex).HasColumnName("lensIndex");
         });
 
         modelBuilder.Entity<LensType>(entity =>
@@ -205,12 +387,40 @@ public partial class Context : DbContext
             entity.Property(e => e.LensTypeId)
                 .HasDefaultValueSql("(newid())")
                 .HasColumnName("lensTypeId");
-            entity.Property(e => e.ExtraPrice).HasColumnName("extraPrice");
+            entity.Property(e => e.BasePrice).HasColumnName("basePrice");
             entity.Property(e => e.LensSpecification)
                 .HasMaxLength(200)
                 .IsUnicode(false)
                 .HasColumnName("lensSpecification");
             entity.Property(e => e.RequiresPrescription).HasColumnName("requiresPrescription");
+            entity.Property(e => e.Description)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasColumnName("description");
+            entity.Property(e => e.Category)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("category");
+            entity.Property(e => e.BrandId).HasColumnName("brandId");
+            entity.Property(e => e.MaterialId).HasColumnName("materialId");
+            entity.Property(e => e.ColorId).HasColumnName("colorId");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("active")
+                .HasColumnName("status");
+
+            entity.HasOne(d => d.Brand).WithMany(p => p.LensTypes)
+                .HasForeignKey(d => d.BrandId)
+                .HasConstraintName("FK_LENS_TYPE_BRAND");
+
+            entity.HasOne(d => d.Material).WithMany(p => p.LensTypes)
+                .HasForeignKey(d => d.MaterialId)
+                .HasConstraintName("FK_LENS_TYPE_MATERIAL");
+
+            entity.HasOne(d => d.Color).WithMany(p => p.LensTypes)
+                .HasForeignKey(d => d.ColorId)
+                .HasConstraintName("FK_LENS_TYPE_COLOR");
         });
 
         modelBuilder.Entity<Order>(entity =>
@@ -239,6 +449,25 @@ public partial class Context : DbContext
                 .HasColumnName("status");
             entity.Property(e => e.TotalAmount).HasColumnName("totalAmount");
             entity.Property(e => e.UserId).HasColumnName("userId");
+            entity.Property(e => e.ShippingMethod)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("shippingMethod");
+            entity.Property(e => e.ShippingFee).HasColumnName("shippingFee");
+            entity.Property(e => e.TrackingNumber)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("trackingNumber");
+            entity.Property(e => e.ShippedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("shippedAt");
+            entity.Property(e => e.DeliveredAt)
+                .HasColumnType("datetime")
+                .HasColumnName("deliveredAt");
+            entity.Property(e => e.ShippingCarrier)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("shippingCarrier");
 
             entity.HasOne(d => d.User).WithMany(p => p.Orders)
                 .HasForeignKey(d => d.UserId)
@@ -257,14 +486,16 @@ public partial class Context : DbContext
             entity.Property(e => e.FeatureId).HasColumnName("featureId");
             entity.Property(e => e.FrameId).HasColumnName("frameId");
             entity.Property(e => e.LensTypeId).HasColumnName("lensTypeId");
+            entity.Property(e => e.LensIndexId).HasColumnName("lensIndexId");
             entity.Property(e => e.OrderId).HasColumnName("orderId");
-            entity.Property(e => e.OrderPrice).HasColumnName("orderPrice");
+            entity.Property(e => e.UnitPrice).HasColumnName("unitPrice");
             entity.Property(e => e.PrescriptionId).HasColumnName("prescriptionId");
             entity.Property(e => e.Quantity).HasColumnName("quantity");
-            entity.Property(e => e.SelectedColor)
+            entity.Property(e => e.SelectedColorId).HasColumnName("selectedColorId");
+            entity.Property(e => e.SelectedSize)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasColumnName("selectedColor");
+                .HasColumnName("selectedSize");
 
             entity.HasOne(d => d.Feature).WithMany(p => p.OrderItems)
                 .HasForeignKey(d => d.FeatureId)
@@ -278,6 +509,10 @@ public partial class Context : DbContext
                 .HasForeignKey(d => d.LensTypeId)
                 .HasConstraintName("FK__ORDER_ITE__lensT__571DF1D5");
 
+            entity.HasOne(d => d.LensIndex).WithMany(p => p.OrderItems)
+                .HasForeignKey(d => d.LensIndexId)
+                .HasConstraintName("FK_ORDER_ITEM_LENS_INDEX");
+
             entity.HasOne(d => d.Order).WithMany(p => p.OrderItems)
                 .HasForeignKey(d => d.OrderId)
                 .HasConstraintName("FK__ORDER_ITE__order__534D60F1");
@@ -285,6 +520,10 @@ public partial class Context : DbContext
             entity.HasOne(d => d.Prescription).WithMany(p => p.OrderItems)
                 .HasForeignKey(d => d.PrescriptionId)
                 .HasConstraintName("FK__ORDER_ITE__presc__5441852A");
+
+            entity.HasOne(d => d.SelectedColor).WithMany()
+                .HasForeignKey(d => d.SelectedColorId)
+                .HasConstraintName("FK_ORDER_ITEM_COLOR");
         });
 
         modelBuilder.Entity<Payment>(entity =>
@@ -341,10 +580,19 @@ public partial class Context : DbContext
                 .IsUnicode(false)
                 .HasColumnName("status");
             entity.Property(e => e.UserId).HasColumnName("userId");
+            entity.Property(e => e.CampaignId).HasColumnName("campaignId");
+            entity.Property(e => e.AdminNotes)
+                .HasColumnType("text")
+                .HasColumnName("adminNotes");
+            entity.Property(e => e.TotalAmount).HasColumnName("totalAmount");
 
             entity.HasOne(d => d.User).WithMany(p => p.Preorders)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("FK__PREORDER__userId__5BE2A6F2");
+
+            entity.HasOne(d => d.Campaign).WithMany(p => p.Preorders)
+                .HasForeignKey(d => d.CampaignId)
+                .HasConstraintName("FK_PREORDER_CAMPAIGN");
         });
 
         modelBuilder.Entity<PreorderItem>(entity =>
@@ -359,14 +607,16 @@ public partial class Context : DbContext
             entity.Property(e => e.FeatureId).HasColumnName("featureId");
             entity.Property(e => e.FrameId).HasColumnName("frameId");
             entity.Property(e => e.LensTypeId).HasColumnName("lensTypeId");
+            entity.Property(e => e.LensIndexId).HasColumnName("lensIndexId");
             entity.Property(e => e.PreorderId).HasColumnName("preorderId");
-            entity.Property(e => e.PreorderPrice).HasColumnName("preorderPrice");
+            entity.Property(e => e.UnitPrice).HasColumnName("unitPrice");
             entity.Property(e => e.PrescriptionId).HasColumnName("prescriptionId");
             entity.Property(e => e.Quantity).HasColumnName("quantity");
-            entity.Property(e => e.SelectedColor)
+            entity.Property(e => e.SelectedColorId).HasColumnName("selectedColorId");
+            entity.Property(e => e.SelectedSize)
                 .HasMaxLength(50)
                 .IsUnicode(false)
-                .HasColumnName("selectedColor");
+                .HasColumnName("selectedSize");
 
             entity.HasOne(d => d.Feature).WithMany(p => p.PreorderItems)
                 .HasForeignKey(d => d.FeatureId)
@@ -380,6 +630,10 @@ public partial class Context : DbContext
                 .HasForeignKey(d => d.LensTypeId)
                 .HasConstraintName("FK__PREORDER___lensT__6383C8BA");
 
+            entity.HasOne(d => d.LensIndex).WithMany(p => p.PreorderItems)
+                .HasForeignKey(d => d.LensIndexId)
+                .HasConstraintName("FK_PREORDER_ITEM_LENS_INDEX");
+
             entity.HasOne(d => d.Preorder).WithMany(p => p.PreorderItems)
                 .HasForeignKey(d => d.PreorderId)
                 .HasConstraintName("FK__PREORDER___preor__5FB337D6");
@@ -387,6 +641,10 @@ public partial class Context : DbContext
             entity.HasOne(d => d.Prescription).WithMany(p => p.PreorderItems)
                 .HasForeignKey(d => d.PrescriptionId)
                 .HasConstraintName("FK__PREORDER___presc__60A75C0F");
+
+            entity.HasOne(d => d.SelectedColor).WithMany()
+                .HasForeignKey(d => d.SelectedColorId)
+                .HasConstraintName("FK_PREORDER_ITEM_COLOR");
         });
 
         modelBuilder.Entity<Prescription>(entity =>
@@ -473,6 +731,154 @@ public partial class Context : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("status");
+        });
+
+        modelBuilder.Entity<ProductReview>(entity =>
+        {
+            entity.HasKey(e => e.ReviewId);
+
+            entity.ToTable("PRODUCT_REVIEW");
+
+            entity.Property(e => e.ReviewId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("reviewId");
+            entity.Property(e => e.UserId).HasColumnName("userId");
+            entity.Property(e => e.FrameId).HasColumnName("frameId");
+            entity.Property(e => e.OrderItemId).HasColumnName("orderItemId");
+            entity.Property(e => e.Rating).HasColumnName("rating");
+            entity.Property(e => e.Title)
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .HasColumnName("title");
+            entity.Property(e => e.Comment)
+                .HasColumnType("text")
+                .HasColumnName("comment");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("visible")
+                .HasColumnName("status");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime")
+                .HasColumnName("createdAt");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("updatedAt");
+
+            entity.HasOne(d => d.User).WithMany(p => p.ProductReviews)
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("FK_PRODUCT_REVIEW_USER");
+
+            entity.HasOne(d => d.Frame).WithMany(p => p.ProductReviews)
+                .HasForeignKey(d => d.FrameId)
+                .HasConstraintName("FK_PRODUCT_REVIEW_FRAME");
+
+            entity.HasOne(d => d.OrderItem).WithMany(p => p.ProductReviews)
+                .HasForeignKey(d => d.OrderItemId)
+                .HasConstraintName("FK_PRODUCT_REVIEW_ORDER_ITEM");
+        });
+
+        modelBuilder.Entity<PreorderCampaign>(entity =>
+        {
+            entity.HasKey(e => e.CampaignId);
+
+            entity.ToTable("PREORDER_CAMPAIGN");
+
+            entity.Property(e => e.CampaignId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("campaignId");
+            entity.Property(e => e.CampaignName)
+                .IsRequired()
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .HasColumnName("campaignName");
+            entity.Property(e => e.Description)
+                .HasColumnType("text")
+                .HasColumnName("description");
+            entity.Property(e => e.StartDate)
+                .HasColumnType("datetime")
+                .HasColumnName("startDate");
+            entity.Property(e => e.EndDate)
+                .HasColumnType("datetime")
+                .HasColumnName("endDate");
+            entity.Property(e => e.MaxSlots).HasColumnName("maxSlots");
+            entity.Property(e => e.CurrentSlots)
+                .HasDefaultValue(0)
+                .HasColumnName("currentSlots");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("upcoming")
+                .HasColumnName("status");
+            entity.Property(e => e.EstimatedDeliveryDate)
+                .HasColumnType("datetime")
+                .HasColumnName("estimatedDeliveryDate");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime")
+                .HasColumnName("createdAt");
+        });
+
+        modelBuilder.Entity<CampaignFrame>(entity =>
+        {
+            entity.HasKey(e => e.CampaignFrameId);
+
+            entity.ToTable("CAMPAIGN_FRAME");
+
+            entity.Property(e => e.CampaignFrameId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("campaignFrameId");
+            entity.Property(e => e.CampaignId).HasColumnName("campaignId");
+            entity.Property(e => e.FrameId).HasColumnName("frameId");
+            entity.Property(e => e.CampaignPrice).HasColumnName("campaignPrice");
+            entity.Property(e => e.MaxQuantityPerOrder)
+                .HasDefaultValue(2)
+                .HasColumnName("maxQuantityPerOrder");
+
+            entity.HasOne(d => d.Campaign).WithMany(p => p.CampaignFrames)
+                .HasForeignKey(d => d.CampaignId)
+                .HasConstraintName("FK_CAMPAIGN_FRAME_CAMPAIGN");
+
+            entity.HasOne(d => d.Frame).WithMany(p => p.CampaignFrames)
+                .HasForeignKey(d => d.FrameId)
+                .HasConstraintName("FK_CAMPAIGN_FRAME_FRAME");
+        });
+
+        modelBuilder.Entity<PreorderStatusLog>(entity =>
+        {
+            entity.HasKey(e => e.LogId);
+
+            entity.ToTable("PREORDER_STATUS_LOG");
+
+            entity.Property(e => e.LogId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("logId");
+            entity.Property(e => e.PreorderId).HasColumnName("preorderId");
+            entity.Property(e => e.PreviousStatus)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("previousStatus");
+            entity.Property(e => e.NewStatus)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("newStatus");
+            entity.Property(e => e.Message)
+                .HasColumnType("text")
+                .HasColumnName("message");
+            entity.Property(e => e.CreatedBy).HasColumnName("createdBy");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime")
+                .HasColumnName("createdAt");
+
+            entity.HasOne(d => d.Preorder).WithMany(p => p.StatusLogs)
+                .HasForeignKey(d => d.PreorderId)
+                .HasConstraintName("FK_PREORDER_STATUS_LOG_PREORDER");
+
+            entity.HasOne(d => d.CreatedByUser).WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .HasConstraintName("FK_PREORDER_STATUS_LOG_USER");
         });
 
         OnModelCreatingPartial(modelBuilder);

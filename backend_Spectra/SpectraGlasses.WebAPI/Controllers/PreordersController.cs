@@ -12,10 +12,14 @@ namespace SpectraGlasses.WebAPI.Controllers
     public class PreordersController : ControllerBase
     {
         private readonly IPreorderService _preorderService;
+        private readonly IPreorderCampaignService _campaignService;
 
-        public PreordersController(IPreorderService preorderService)
+        public PreordersController(
+            IPreorderService preorderService,
+            IPreorderCampaignService campaignService)
         {
             _preorderService = preorderService;
+            _campaignService = campaignService;
         }
 
         private Guid GetCurrentUserId()
@@ -68,10 +72,37 @@ namespace SpectraGlasses.WebAPI.Controllers
                 FrameId = item.FrameId,
                 LensTypeId = item.LensTypeId,
                 FeatureId = item.FeatureId,
+                LensIndexId = item.LensIndexId,
                 PrescriptionId = item.PrescriptionId,
                 Quantity = item.Quantity,
-                SelectedColor = item.SelectedColor
+                SelectedColorId = item.SelectedColorId,
+                SelectedSize = item.SelectedSize
             }).ToList();
+
+            // If campaign is specified, validate against campaign rules
+            if (request.CampaignId.HasValue)
+            {
+                var campaign = await _campaignService.GetCampaignByIdAsync(request.CampaignId.Value);
+                if (campaign == null)
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        ErrorCode = "CAMPAIGN_NOT_FOUND",
+                        Message = "Campaign not found"
+                    });
+                }
+
+                var campaignValid = await _campaignService.ValidatePreorderAgainstCampaignAsync(
+                    request.CampaignId.Value, preorderItems);
+                if (!campaignValid)
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        ErrorCode = "CAMPAIGN_VALIDATION_ERROR",
+                        Message = "Preorder does not meet campaign requirements. Check that the campaign is active, has available slots, and items match campaign frames/quantity limits."
+                    });
+                }
+            }
 
             // Validate preorder items
             var validationResult = await _preorderService.ValidatePreorderItemsAsync(preorderItems, userId);
@@ -89,10 +120,17 @@ namespace SpectraGlasses.WebAPI.Controllers
             var preorder = new Preorder
             {
                 UserId = userId,
-                ExpectedDate = request.ExpectedDate
+                ExpectedDate = request.ExpectedDate,
+                CampaignId = request.CampaignId
             };
 
             var createdPreorder = await _preorderService.CreatePreorderAsync(preorder, preorderItems);
+
+            // Increment campaign slot count if campaign-linked
+            if (request.CampaignId.HasValue)
+            {
+                await _campaignService.IncrementCampaignSlotsAsync(request.CampaignId.Value);
+            }
 
             return CreatedAtAction(nameof(GetPreorderById), new { id = createdPreorder.PreorderId }, createdPreorder);
         }

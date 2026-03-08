@@ -33,9 +33,6 @@ namespace Services.GlassesService
         private readonly GenericRepository<OrderItem> _orderItemRepository;
         private readonly GenericRepository<PreorderItem> _preorderItemRepository;
 
-        private const string ActiveStatus = "active";
-        private const string DisabledStatus = "disabled";
-
         public LensTypeService(
             GenericRepository<LensType> lensTypeRepository,
             GenericRepository<OrderItem> orderItemRepository,
@@ -96,6 +93,8 @@ namespace Services.GlassesService
         public async Task<LensType> CreateLensTypeAsync(LensType lensType)
         {
             lensType.LensTypeId = Guid.NewGuid();
+            if (string.IsNullOrEmpty(lensType.Status))
+                lensType.Status = "active";
             return await _lensTypeRepository.CreateAsync(lensType);
         }
 
@@ -108,15 +107,29 @@ namespace Services.GlassesService
                 return null;
             }
 
-            // Update properties if provided
             if (!string.IsNullOrEmpty(updatedLensType.LensSpecification))
                 existingLensType.LensSpecification = updatedLensType.LensSpecification;
 
             if (updatedLensType.RequiresPrescription.HasValue)
                 existingLensType.RequiresPrescription = updatedLensType.RequiresPrescription;
 
-            if (updatedLensType.ExtraPrice.HasValue)
-                existingLensType.ExtraPrice = updatedLensType.ExtraPrice;
+            if (updatedLensType.BasePrice.HasValue)
+                existingLensType.BasePrice = updatedLensType.BasePrice;
+
+            if (updatedLensType.Description != null)
+                existingLensType.Description = updatedLensType.Description;
+
+            if (updatedLensType.Category != null)
+                existingLensType.Category = updatedLensType.Category;
+
+            if (updatedLensType.BrandId.HasValue)
+                existingLensType.BrandId = updatedLensType.BrandId;
+
+            if (updatedLensType.MaterialId.HasValue)
+                existingLensType.MaterialId = updatedLensType.MaterialId;
+
+            if (updatedLensType.ColorId.HasValue)
+                existingLensType.ColorId = updatedLensType.ColorId;
 
             return await _lensTypeRepository.UpdateAsync(existingLensType);
         }
@@ -124,54 +137,31 @@ namespace Services.GlassesService
         public async Task<bool> DisableLensTypeAsync(Guid lensTypeId)
         {
             var lensType = await GetLensTypeByIdAsync(lensTypeId);
+            if (lensType == null) return false;
 
-            if (lensType == null)
-            {
-                return false;
-            }
-
-            // For lens types, we don't have a status field in the model
-            // So we'll set RequiresPrescription to null to indicate disabled
-            // Or we could add a Status field to the model
-            // For now, we'll just return true to indicate the operation was attempted
-            // In a real scenario, you might want to add a Status field to LensType
-            
+            lensType.Status = "disabled";
+            await _lensTypeRepository.UpdateAsync(lensType);
             return true;
         }
 
         public async Task<bool> CanDeleteLensTypeAsync(Guid lensTypeId)
         {
-            // Check if lens type is used in any orders
             var orderItems = await _orderItemRepository.SearchAsync(oi => oi.LensTypeId == lensTypeId);
-            if (orderItems.Any())
-            {
-                return false;
-            }
+            if (orderItems.Any()) return false;
 
-            // Check if lens type is used in any preorders
             var preorderItems = await _preorderItemRepository.SearchAsync(pi => pi.LensTypeId == lensTypeId);
-            if (preorderItems.Any())
-            {
-                return false;
-            }
+            if (preorderItems.Any()) return false;
 
             return true;
         }
 
         public async Task<bool> DeleteLensTypeAsync(Guid lensTypeId)
         {
-            // First check if we can delete
             if (!await CanDeleteLensTypeAsync(lensTypeId))
-            {
                 return false;
-            }
 
             var lensType = await GetLensTypeByIdAsync(lensTypeId);
-
-            if (lensType == null)
-            {
-                return false;
-            }
+            if (lensType == null) return false;
 
             return await _lensTypeRepository.DeleteAsync(lensType);
         }

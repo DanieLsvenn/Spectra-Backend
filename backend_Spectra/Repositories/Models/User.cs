@@ -32,4 +32,6 @@ public partial class User
     public virtual ICollection<Preorder> Preorders { get; set; } = new List<Preorder>();
 
     public virtual ICollection<Prescription> Prescriptions { get; set; } = new List<Prescription>();
+
+    public virtual ICollection<ProductReview> ProductReviews { get; set; } = new List<ProductReview>();
 }

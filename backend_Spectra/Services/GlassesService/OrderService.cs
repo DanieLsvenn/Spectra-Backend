@@ -31,6 +31,7 @@ namespace Services.GlassesService
 
         // Update operations
         Task<Order?> UpdateOrderStatusAsync(Guid orderId, string newStatus, string userRole, Guid userId);
+        Task<Order?> UpdateOrderShippingAsync(Guid orderId, string shippingMethod, double shippingFee, double totalAmount);
         Task<bool> CanModifyOrderAsync(Guid orderId);
 
         // Price calculation
@@ -45,6 +46,7 @@ namespace Services.GlassesService
         private readonly GenericRepository<Frame> _frameRepository;
         private readonly GenericRepository<LensType> _lensTypeRepository;
         private readonly GenericRepository<LensFeature> _lensFeatureRepository;
+        private readonly GenericRepository<LensIndex> _lensIndexRepository;
         private readonly GenericRepository<Prescription> _prescriptionRepository;
         private readonly GenericRepository<Payment> _paymentRepository;
 
@@ -76,6 +78,7 @@ namespace Services.GlassesService
             GenericRepository<Frame> frameRepository,
             GenericRepository<LensType> lensTypeRepository,
             GenericRepository<LensFeature> lensFeatureRepository,
+            GenericRepository<LensIndex> lensIndexRepository,
             GenericRepository<Prescription> prescriptionRepository,
             GenericRepository<Payment> paymentRepository)
         {
@@ -84,6 +87,7 @@ namespace Services.GlassesService
             _frameRepository = frameRepository;
             _lensTypeRepository = lensTypeRepository;
             _lensFeatureRepository = lensFeatureRepository;
+            _lensIndexRepository = lensIndexRepository;
             _prescriptionRepository = prescriptionRepository;
             _paymentRepository = paymentRepository;
         }
@@ -108,7 +112,7 @@ namespace Services.GlassesService
             {
                 item.OrderItemId = Guid.NewGuid();
                 item.OrderId = createdOrder.OrderId;
-                item.OrderPrice = await CalculateItemPriceAsync(item);
+                item.UnitPrice = await CalculateItemPriceAsync(item);
                 await _orderItemRepository.CreateAsync(item);
 
                 // Deduct stock for each frame
@@ -212,8 +216,8 @@ namespace Services.GlassesService
                         continue;
                     }
 
-                    // Validate selectedColor when frame color is NULL
-                    if (string.IsNullOrEmpty(frame.Color) && string.IsNullOrEmpty(item.SelectedColor))
+                    // Validate selectedColor when frame has no colors assigned
+                    if (!frame.FrameColors.Any() && !item.SelectedColorId.HasValue)
                     {
                         result.IsValid = false;
                         result.Errors.Add($"Frame '{frame.FrameName}' requires a color selection");
@@ -459,6 +463,23 @@ namespace Services.GlassesService
             return await _orderRepository.UpdateAsync(order);
         }
 
+        public async Task<Order?> UpdateOrderShippingAsync(Guid orderId, string shippingMethod, double shippingFee, double totalAmount)
+        {
+            var order = await GetOrderByIdAsync(orderId);
+
+            if (order == null)
+            {
+                return null;
+            }
+
+            // Update shipping information
+            order.ShippingMethod = shippingMethod;
+            order.ShippingFee = shippingFee;
+            order.TotalAmount = totalAmount;
+
+            return await _orderRepository.UpdateAsync(order);
+        }
+
         public async Task<bool> CanModifyOrderAsync(Guid orderId)
         {
             // Check if order has been paid
@@ -491,6 +512,7 @@ namespace Services.GlassesService
             double basePrice = 0;
             double lensTypePrice = 0;
             double featurePrice = 0;
+            double lensIndexPrice = 0;
 
             // Get frame base price
             if (item.FrameId.HasValue)
@@ -505,7 +527,7 @@ namespace Services.GlassesService
             {
                 var lensTypes = await _lensTypeRepository.SearchAsync(lt => lt.LensTypeId == item.LensTypeId);
                 var lensType = lensTypes.FirstOrDefault();
-                lensTypePrice = lensType?.ExtraPrice ?? 0;
+                lensTypePrice = lensType?.BasePrice ?? 0;
             }
 
             // Get lens feature extra price
@@ -516,7 +538,15 @@ namespace Services.GlassesService
                 featurePrice = feature?.ExtraPrice ?? 0;
             }
 
-            return basePrice + lensTypePrice + featurePrice;
+            // Get lens index additional price
+            if (item.LensIndexId.HasValue)
+            {
+                var lensIndices = await _lensIndexRepository.SearchAsync(li => li.LensIndexId == item.LensIndexId);
+                var lensIndex = lensIndices.FirstOrDefault();
+                lensIndexPrice = lensIndex?.AdditionalPrice ?? 0;
+            }
+
+            return basePrice + lensTypePrice + featurePrice + lensIndexPrice;
         }
 
         #endregion

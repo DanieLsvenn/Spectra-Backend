@@ -21,16 +21,15 @@ namespace Services.GlassesService
         Task<List<LensFeature>> GetAllLensFeaturesAsync();
         Task<PaginationResult<LensFeature>> GetLensFeaturesAsync(int currentPage = 1, int pageSize = 10);
         Task<LensFeature?> GetLensFeatureByIdAsync(Guid featureId);
-        Task<List<LensFeature>> GetLensFeaturesByIndexAsync(double lensIndex);
 
         // Price calculation helpers
-        double CalculateTotalPrice(double basePrice, LensFeature? feature, LensType? lensType);
+        double CalculateTotalPrice(double frameBasePrice, LensType? lensType, LensFeature? feature, LensIndex? lensIndex);
         double GetFeatureExtraPrice(LensFeature? feature);
-        double GetLensTypeExtraPrice(LensType? lensType);
+        double GetLensTypeBasePrice(LensType? lensType);
+        double GetLensIndexAdditionalPrice(LensIndex? lensIndex);
 
         // Price validation
         PriceValidationResult ValidatePrice(double? price);
-        PriceValidationResult ValidateLensIndex(double? lensIndex);
 
         // Write operations (Manager only)
         Task<LensFeature> CreateLensFeatureAsync(LensFeature lensFeature);
@@ -45,14 +44,8 @@ namespace Services.GlassesService
         private readonly GenericRepository<OrderItem> _orderItemRepository;
         private readonly GenericRepository<PreorderItem> _preorderItemRepository;
 
-        // Price validation constants
         private const double MinPrice = 0;
         private const double MaxPrice = 10000;
-
-        // Lens index validation constants (common lens indices)
-        private static readonly double[] ValidLensIndices = { 1.50, 1.53, 1.56, 1.57, 1.59, 1.60, 1.67, 1.70, 1.74 };
-        private const double MinLensIndex = 1.50;
-        private const double MaxLensIndex = 1.74;
 
         public LensFeatureService(
             GenericRepository<LensFeature> lensFeatureRepository,
@@ -79,7 +72,7 @@ namespace Services.GlassesService
                 predicate,
                 currentPage,
                 pageSize,
-                orderBy: lf => lf.LensIndex,
+                orderBy: lf => lf.FeatureSpecification,
                 ascending: true
             );
         }
@@ -90,22 +83,13 @@ namespace Services.GlassesService
             return features.FirstOrDefault();
         }
 
-        public async Task<List<LensFeature>> GetLensFeaturesByIndexAsync(double lensIndex)
-        {
-            var features = await _lensFeatureRepository.SearchAsync(lf => lf.LensIndex == lensIndex);
-            return features.ToList();
-        }
-
         #endregion
 
         #region Price Calculation Helpers
 
-        public double CalculateTotalPrice(double basePrice, LensFeature? feature, LensType? lensType)
+        public double CalculateTotalPrice(double frameBasePrice, LensType? lensType, LensFeature? feature, LensIndex? lensIndex)
         {
-            var featurePrice = GetFeatureExtraPrice(feature);
-            var lensTypePrice = GetLensTypeExtraPrice(lensType);
-
-            return basePrice + featurePrice + lensTypePrice;
+            return frameBasePrice + GetLensTypeBasePrice(lensType) + GetFeatureExtraPrice(feature) + GetLensIndexAdditionalPrice(lensIndex);
         }
 
         public double GetFeatureExtraPrice(LensFeature? feature)
@@ -113,9 +97,14 @@ namespace Services.GlassesService
             return feature?.ExtraPrice ?? 0;
         }
 
-        public double GetLensTypeExtraPrice(LensType? lensType)
+        public double GetLensTypeBasePrice(LensType? lensType)
         {
-            return lensType?.ExtraPrice ?? 0;
+            return lensType?.BasePrice ?? 0;
+        }
+
+        public double GetLensIndexAdditionalPrice(LensIndex? lensIndex)
+        {
+            return lensIndex?.AdditionalPrice ?? 0;
         }
 
         #endregion
@@ -144,22 +133,6 @@ namespace Services.GlassesService
             return result;
         }
 
-        public PriceValidationResult ValidateLensIndex(double? lensIndex)
-        {
-            var result = new PriceValidationResult { IsValid = true };
-
-            if (lensIndex.HasValue)
-            {
-                if (lensIndex < MinLensIndex || lensIndex > MaxLensIndex)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Lens index must be between {MinLensIndex} and {MaxLensIndex}");
-                }
-            }
-
-            return result;
-        }
-
         #endregion
 
         #region Write Operations
@@ -179,10 +152,6 @@ namespace Services.GlassesService
                 return null;
             }
 
-            // Update properties if provided
-            if (updatedFeature.LensIndex.HasValue)
-                existingFeature.LensIndex = updatedFeature.LensIndex;
-
             if (!string.IsNullOrEmpty(updatedFeature.FeatureSpecification))
                 existingFeature.FeatureSpecification = updatedFeature.FeatureSpecification;
 
@@ -194,37 +163,22 @@ namespace Services.GlassesService
 
         public async Task<bool> CanDeleteLensFeatureAsync(Guid featureId)
         {
-            // Check if feature is used in any orders
             var orderItems = await _orderItemRepository.SearchAsync(oi => oi.FeatureId == featureId);
-            if (orderItems.Any())
-            {
-                return false;
-            }
+            if (orderItems.Any()) return false;
 
-            // Check if feature is used in any preorders
             var preorderItems = await _preorderItemRepository.SearchAsync(pi => pi.FeatureId == featureId);
-            if (preorderItems.Any())
-            {
-                return false;
-            }
+            if (preorderItems.Any()) return false;
 
             return true;
         }
 
         public async Task<bool> DeleteLensFeatureAsync(Guid featureId)
         {
-            // First check if we can delete
             if (!await CanDeleteLensFeatureAsync(featureId))
-            {
                 return false;
-            }
 
             var feature = await GetLensFeatureByIdAsync(featureId);
-
-            if (feature == null)
-            {
-                return false;
-            }
+            if (feature == null) return false;
 
             return await _lensFeatureRepository.DeleteAsync(feature);
         }

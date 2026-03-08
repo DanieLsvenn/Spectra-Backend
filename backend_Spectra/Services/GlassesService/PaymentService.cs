@@ -172,7 +172,7 @@ namespace Services.GlassesService
             double totalAmount = 0;
             foreach (var item in preorder.PreorderItems)
             {
-                totalAmount += (item.PreorderPrice ?? 0) * (item.Quantity ?? 1);
+                totalAmount += (item.UnitPrice ?? 0) * (item.Quantity ?? 1);
             }
 
             var payment = new Payment

@@ -21,6 +21,18 @@ public partial class Order
 
     public DateTime? CreatedAt { get; set; }
 
+    public string ShippingMethod { get; set; }
+
+    public double? ShippingFee { get; set; }
+
+    public string TrackingNumber { get; set; }
+
+    public DateTime? ShippedAt { get; set; }
+
+    public DateTime? DeliveredAt { get; set; }
+
+    public string ShippingCarrier { get; set; }
+
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();

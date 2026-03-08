@@ -17,9 +17,19 @@ public partial class Preorder
 
     public DateTime? CreatedAt { get; set; }
 
+    public Guid? CampaignId { get; set; }
+
+    public string AdminNotes { get; set; }
+
+    public double? TotalAmount { get; set; }
+
+    public virtual PreorderCampaign Campaign { get; set; }
+
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
     public virtual ICollection<PreorderItem> PreorderItems { get; set; } = new List<PreorderItem>();
+
+    public virtual ICollection<PreorderStatusLog> StatusLogs { get; set; } = new List<PreorderStatusLog>();
 
     public virtual User User { get; set; }
 }

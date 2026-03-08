@@ -281,10 +281,10 @@ namespace Services.GlassesService
                 {
                     FrameId = g.Key,
                     FrameName = g.First().Frame?.FrameName,
-                    Brand = g.First().Frame?.Brand,
+                    Brand = g.First().Frame?.Brand?.BrandName,
                     BasePrice = g.First().Frame?.BasePrice,
                     TotalSold = g.Sum(oi => oi.Quantity ?? 0),
-                    TotalRevenue = g.Sum(oi => (oi.OrderPrice ?? 0) * (oi.Quantity ?? 1))
+                    TotalRevenue = g.Sum(oi => (oi.UnitPrice ?? 0) * (oi.Quantity ?? 1))
                 })
                 .OrderByDescending(pf => pf.TotalSold)
                 .Take(limit)

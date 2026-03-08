@@ -23,6 +23,12 @@ public partial class ComplaintRequest
 
     public DateTime? CreatedAt { get; set; }
 
+    public double? RefundAmount { get; set; }
+
+    public string ReturnTrackingNumber { get; set; }
+
+    public DateTime? RefundedAt { get; set; }
+
     public virtual OrderItem OrderItem { get; set; }
 
     public virtual User User { get; set; }

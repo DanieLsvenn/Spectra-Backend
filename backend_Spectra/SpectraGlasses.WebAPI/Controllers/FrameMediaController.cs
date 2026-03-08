@@ -31,19 +31,22 @@ namespace SpectraGlasses.WebAPI.Controllers
                 MediaId = media.MediaId,
                 FrameId = media.FrameId,
                 MediaUrl = media.MediaUrl,
-                MediaType = media.MediaType
+                MediaType = media.MediaType,
+                ColorId = media.ColorId,
+                ColorName = media.Color?.ColorName,
+                HexCode = media.Color?.HexCode
             };
         }
 
         #region Public Endpoints
 
         /// <summary>
-        /// Gets all media for a specific frame
+        /// Gets all media for a specific frame. Optionally filter by colorId.
         /// </summary>
         [HttpGet("frame/{frameId:guid}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetMediaByFrameId(Guid frameId)
+        public async Task<IActionResult> GetMediaByFrameId(Guid frameId, [FromQuery] Guid? colorId = null)
         {
             // Check if frame exists
             var frame = await _frameService.GetFrameByIdAsync(frameId);
@@ -61,7 +64,16 @@ namespace SpectraGlasses.WebAPI.Controllers
                 }
             }
 
-            var mediaList = await _frameMediaService.GetMediaByFrameIdAsync(frameId);
+            List<FrameMedium> mediaList;
+            if (colorId.HasValue)
+            {
+                mediaList = await _frameMediaService.GetMediaByFrameAndColorAsync(frameId, colorId.Value);
+            }
+            else
+            {
+                mediaList = await _frameMediaService.GetMediaByFrameIdAsync(frameId);
+            }
+
             var response = mediaList.Select(MapToResponse).ToList();
 
             return Ok(response);
@@ -139,7 +151,8 @@ namespace SpectraGlasses.WebAPI.Controllers
             {
                 FrameId = request.FrameId,
                 MediaUrl = request.MediaUrl,
-                MediaType = request.MediaType.ToLower()
+                MediaType = request.MediaType.ToLower(),
+                ColorId = request.ColorId
             };
 
             var createdMedia = await _frameMediaService.AddMediaAsync(media);
@@ -211,7 +224,8 @@ namespace SpectraGlasses.WebAPI.Controllers
             var mediaList = request.MediaItems.Select(item => new FrameMedium
             {
                 MediaUrl = item.MediaUrl,
-                MediaType = item.MediaType?.ToLower() ?? "image"
+                MediaType = item.MediaType?.ToLower() ?? "image",
+                ColorId = item.ColorId
             }).ToList();
 
             var createdMedia = await _frameMediaService.AddMultipleMediaAsync(request.FrameId, mediaList);
@@ -249,7 +263,8 @@ namespace SpectraGlasses.WebAPI.Controllers
             var updatedMedia = new FrameMedium
             {
                 MediaUrl = request.MediaUrl,
-                MediaType = request.MediaType?.ToLower()
+                MediaType = request.MediaType?.ToLower(),
+                ColorId = request.ColorId
             };
 
             var result = await _frameMediaService.UpdateMediaAsync(id, updatedMedia);
@@ -324,13 +339,14 @@ namespace SpectraGlasses.WebAPI.Controllers
         /// <param name="frameId">The frame ID to associate the image with</param>
         /// <param name="file">The image file to upload</param>
         /// <param name="mediaType">The type of media (image, thumbnail, gallery). Defaults to "image"</param>
+        /// <param name="colorId">Optional color ID to associate this image with a specific color variant</param>
         [HttpPost("upload/{frameId:guid}")]
         [Authorize(Roles = "manager")]
         [ProducesResponseType(typeof(FrameMediaUploadResponse), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<IActionResult> UploadImage(Guid frameId, IFormFile file, [FromQuery] string mediaType = "image")
+        public async Task<IActionResult> UploadImage(Guid frameId, IFormFile file, [FromQuery] string mediaType = "image", [FromQuery] Guid? colorId = null)
         {
             // Validate frame exists
             var frame = await _frameService.GetFrameByIdForManagerAsync(frameId);
@@ -405,7 +421,8 @@ namespace SpectraGlasses.WebAPI.Controllers
             {
                 FrameId = frameId,
                 MediaUrl = uploadResult.Url,
-                MediaType = mediaType.ToLower()
+                MediaType = mediaType.ToLower(),
+                ColorId = colorId
             };
 
             var createdMedia = await _frameMediaService.AddMediaAsync(media);
@@ -419,6 +436,7 @@ namespace SpectraGlasses.WebAPI.Controllers
                     FrameId = createdMedia.FrameId,
                     MediaUrl = createdMedia.MediaUrl,
                     MediaType = createdMedia.MediaType,
+                    ColorId = createdMedia.ColorId,
                     PublicId = uploadResult.PublicId
                 }
             );
@@ -430,13 +448,14 @@ namespace SpectraGlasses.WebAPI.Controllers
         /// <param name="frameId">The frame ID to associate the images with</param>
         /// <param name="files">The image files to upload</param>
         /// <param name="mediaType">The type of media (image, thumbnail, gallery). Defaults to "image"</param>
+        /// <param name="colorId">Optional color ID to associate these images with a specific color variant</param>
         [HttpPost("upload-multiple/{frameId:guid}")]
         [Authorize(Roles = "manager")]
         [ProducesResponseType(typeof(List<FrameMediaUploadResponse>), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<IActionResult> UploadMultipleImages(Guid frameId, List<IFormFile> files, [FromQuery] string mediaType = "image")
+        public async Task<IActionResult> UploadMultipleImages(Guid frameId, List<IFormFile> files, [FromQuery] string mediaType = "image", [FromQuery] Guid? colorId = null)
         {
             // Validate frame exists
             var frame = await _frameService.GetFrameByIdForManagerAsync(frameId);
@@ -524,7 +543,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 {
                     FrameId = frameId,
                     MediaUrl = uploadResult.Url,
-                    MediaType = mediaType.ToLower()
+                    MediaType = mediaType.ToLower(),
+                    ColorId = colorId
                 };
 
                 var createdMedia = await _frameMediaService.AddMediaAsync(media);
@@ -535,6 +555,7 @@ namespace SpectraGlasses.WebAPI.Controllers
                     FrameId = createdMedia.FrameId,
                     MediaUrl = createdMedia.MediaUrl,
                     MediaType = createdMedia.MediaType,
+                    ColorId = createdMedia.ColorId,
                     PublicId = uploadResult.PublicId
                 });
             }

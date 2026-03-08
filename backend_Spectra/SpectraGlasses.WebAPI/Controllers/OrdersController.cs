@@ -12,10 +12,12 @@ namespace SpectraGlasses.WebAPI.Controllers
     public class OrdersController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly IShippingService _shippingService;
 
-        public OrdersController(IOrderService orderService)
+        public OrdersController(IOrderService orderService, IShippingService shippingService)
         {
             _orderService = orderService;
+            _shippingService = shippingService;
         }
 
         private Guid GetCurrentUserId()
@@ -77,9 +79,11 @@ namespace SpectraGlasses.WebAPI.Controllers
                 FrameId = item.FrameId,
                 LensTypeId = item.LensTypeId,
                 FeatureId = item.FeatureId,
+                LensIndexId = item.LensIndexId,
                 PrescriptionId = item.PrescriptionId,
                 Quantity = item.Quantity,
-                SelectedColor = item.SelectedColor
+                SelectedColorId = item.SelectedColorId,
+                SelectedSize = item.SelectedSize
             }).ToList();
 
             // Validate order items
@@ -98,10 +102,18 @@ namespace SpectraGlasses.WebAPI.Controllers
             var order = new Order
             {
                 UserId = userId,
-                ShippingAddress = request.ShippingAddress
+                ShippingAddress = request.ShippingAddress,
+                ShippingMethod = request.ShippingMethod ?? "standard"
             };
 
             var createdOrder = await _orderService.CreateOrderAsync(order, orderItems);
+
+            // Calculate and apply shipping fee, then persist
+            var shippingFee = _shippingService.CalculateShippingFee(
+                createdOrder.ShippingMethod, createdOrder.TotalAmount ?? 0);
+            createdOrder.ShippingFee = shippingFee;
+            createdOrder.TotalAmount = (createdOrder.TotalAmount ?? 0) + shippingFee;
+            await _orderService.UpdateOrderShippingAsync(createdOrder.OrderId, createdOrder.ShippingMethod, shippingFee, createdOrder.TotalAmount ?? 0);
 
             var summary = new OrderSummaryResponse
             {

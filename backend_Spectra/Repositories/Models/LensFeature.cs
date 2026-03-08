@@ -9,8 +9,6 @@ public partial class LensFeature
 {
     public Guid FeatureId { get; set; }
 
-    public double? LensIndex { get; set; }
-
     public string FeatureSpecification { get; set; }
 
     public double? ExtraPrice { get; set; }

@@ -103,12 +103,12 @@ namespace SpectraGlasses.WebAPI.Controllers
             }
 
             // Validate price
-            if (request.ExtraPrice.HasValue && request.ExtraPrice < 0)
+            if (request.BasePrice.HasValue && request.BasePrice < 0)
             {
                 return BadRequest(new ErrorResponse
                 {
                     ErrorCode = "VALIDATION_ERROR",
-                    Message = "Extra price cannot be negative"
+                    Message = "Base price cannot be negative"
                 });
             }
 
@@ -116,7 +116,7 @@ namespace SpectraGlasses.WebAPI.Controllers
             {
                 LensSpecification = request.LensSpecification,
                 RequiresPrescription = request.RequiresPrescription,
-                ExtraPrice = request.ExtraPrice
+                BasePrice = request.BasePrice
             };
 
             var createdLensType = await _lensTypeService.CreateLensTypeAsync(lensType);
@@ -141,12 +141,12 @@ namespace SpectraGlasses.WebAPI.Controllers
         public async Task<IActionResult> UpdateLensType(Guid id, [FromBody] UpdateLensTypeRequest request)
         {
             // Validate price if provided
-            if (request.ExtraPrice.HasValue && request.ExtraPrice < 0)
+            if (request.BasePrice.HasValue && request.BasePrice < 0)
             {
                 return BadRequest(new ErrorResponse
                 {
                     ErrorCode = "VALIDATION_ERROR",
-                    Message = "Extra price cannot be negative"
+                    Message = "Base price cannot be negative"
                 });
             }
 
@@ -154,7 +154,7 @@ namespace SpectraGlasses.WebAPI.Controllers
             {
                 LensSpecification = request.LensSpecification,
                 RequiresPrescription = request.RequiresPrescription,
-                ExtraPrice = request.ExtraPrice
+                BasePrice = request.BasePrice
             };
 
             var result = await _lensTypeService.UpdateLensTypeAsync(id, updatedLensType);

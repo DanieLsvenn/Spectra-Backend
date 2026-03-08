@@ -12,13 +12,16 @@ namespace SpectraGlasses.WebAPI.Controllers
     {
         private readonly ILensFeatureService _lensFeatureService;
         private readonly ILensTypeService _lensTypeService;
+        private readonly ILensIndexService _lensIndexService;
 
         public LensFeaturesController(
             ILensFeatureService lensFeatureService,
-            ILensTypeService lensTypeService)
+            ILensTypeService lensTypeService,
+            ILensIndexService lensIndexService)
         {
             _lensFeatureService = lensFeatureService;
             _lensTypeService = lensTypeService;
+            _lensIndexService = lensIndexService;
         }
 
         #region Public Endpoints (No Authorization)
@@ -61,18 +64,7 @@ namespace SpectraGlasses.WebAPI.Controllers
         }
 
         /// <summary>
-        /// Gets lens features by lens index
-        /// </summary>
-        [HttpGet("by-index/{lensIndex:double}")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetLensFeaturesByIndex(double lensIndex)
-        {
-            var features = await _lensFeatureService.GetLensFeaturesByIndexAsync(lensIndex);
-            return Ok(features);
-        }
-
-        /// <summary>
-        /// Calculates total price based on frame, lens feature, and lens type
+        /// Calculates total price based on frame, lens feature, lens type, and lens index
         /// </summary>
         [HttpPost("calculate-price")]
         [ProducesResponseType(typeof(PriceCalculationResponse), StatusCodes.Status200OK)]
@@ -90,6 +82,7 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             LensFeature? feature = null;
             LensType? lensType = null;
+            LensIndex? lensIndex = null;
 
             if (request.LensFeatureId.HasValue)
             {
@@ -101,15 +94,22 @@ namespace SpectraGlasses.WebAPI.Controllers
                 lensType = await _lensTypeService.GetLensTypeByIdAsync(request.LensTypeId.Value);
             }
 
+            if (request.LensIndexId.HasValue)
+            {
+                lensIndex = await _lensIndexService.GetLensIndexByIdAsync(request.LensIndexId.Value);
+            }
+
             var featureExtraPrice = _lensFeatureService.GetFeatureExtraPrice(feature);
-            var lensTypeExtraPrice = _lensFeatureService.GetLensTypeExtraPrice(lensType);
-            var totalPrice = _lensFeatureService.CalculateTotalPrice(request.BasePrice, feature, lensType);
+            var lensTypeBasePrice = _lensFeatureService.GetLensTypeBasePrice(lensType);
+            var lensIndexExtraPrice = _lensFeatureService.GetLensIndexAdditionalPrice(lensIndex);
+            var totalPrice = _lensFeatureService.CalculateTotalPrice(request.BasePrice, lensType, feature, lensIndex);
 
             return Ok(new PriceCalculationResponse
             {
                 BasePrice = request.BasePrice,
                 FeatureExtraPrice = featureExtraPrice,
-                LensTypeExtraPrice = lensTypeExtraPrice,
+                LensTypeExtraPrice = lensTypeBasePrice,
+                LensIndexExtraPrice = lensIndexExtraPrice,
                 TotalPrice = totalPrice
             });
         }
@@ -149,20 +149,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 });
             }
 
-            // Validate lens index
-            var indexValidation = _lensFeatureService.ValidateLensIndex(request.LensIndex);
-            if (!indexValidation.IsValid)
-            {
-                return BadRequest(new ErrorResponse
-                {
-                    ErrorCode = "VALIDATION_ERROR",
-                    Message = string.Join("; ", indexValidation.Errors)
-                });
-            }
-
             var lensFeature = new LensFeature
             {
-                LensIndex = request.LensIndex,
                 FeatureSpecification = request.FeatureSpecification,
                 ExtraPrice = request.ExtraPrice
             };
@@ -199,20 +187,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 });
             }
 
-            // Validate lens index if provided
-            var indexValidation = _lensFeatureService.ValidateLensIndex(request.LensIndex);
-            if (!indexValidation.IsValid)
-            {
-                return BadRequest(new ErrorResponse
-                {
-                    ErrorCode = "VALIDATION_ERROR",
-                    Message = string.Join("; ", indexValidation.Errors)
-                });
-            }
-
             var updatedFeature = new LensFeature
             {
-                LensIndex = request.LensIndex,
                 FeatureSpecification = request.FeatureSpecification,
                 ExtraPrice = request.ExtraPrice
             };

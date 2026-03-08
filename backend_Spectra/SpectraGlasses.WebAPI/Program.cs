@@ -72,8 +72,14 @@ builder.Services.AddDbContext<Context>(options =>
 builder.Services.AddScoped<GenericRepository<User>>();
 builder.Services.AddScoped<GenericRepository<Frame>>();
 builder.Services.AddScoped<GenericRepository<FrameMedium>>();
+builder.Services.AddScoped<GenericRepository<FrameColor>>();
+builder.Services.AddScoped<GenericRepository<FrameSize>>();
+builder.Services.AddScoped<GenericRepository<Brand>>();
+builder.Services.AddScoped<GenericRepository<Material>>();
+builder.Services.AddScoped<GenericRepository<Color>>();
 builder.Services.AddScoped<GenericRepository<LensType>>();
 builder.Services.AddScoped<GenericRepository<LensFeature>>();
+builder.Services.AddScoped<GenericRepository<LensIndex>>();
 builder.Services.AddScoped<GenericRepository<Order>>();
 builder.Services.AddScoped<GenericRepository<OrderItem>>();
 builder.Services.AddScoped<GenericRepository<Preorder>>();
@@ -81,13 +87,21 @@ builder.Services.AddScoped<GenericRepository<PreorderItem>>();
 builder.Services.AddScoped<GenericRepository<Payment>>();
 builder.Services.AddScoped<GenericRepository<Prescription>>();
 builder.Services.AddScoped<GenericRepository<ComplaintRequest>>();
+builder.Services.AddScoped<GenericRepository<ProductReview>>();
+builder.Services.AddScoped<GenericRepository<PreorderCampaign>>();
+builder.Services.AddScoped<GenericRepository<CampaignFrame>>();
+builder.Services.AddScoped<GenericRepository<PreorderStatusLog>>();
 
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IFrameService, FrameService>();
 builder.Services.AddScoped<IFrameMediaService, FrameMediaService>();
+builder.Services.AddScoped<IBrandService, BrandService>();
+builder.Services.AddScoped<IMaterialService, MaterialService>();
+builder.Services.AddScoped<IColorService, ColorService>();
 builder.Services.AddScoped<ILensTypeService, LensTypeService>();
 builder.Services.AddScoped<ILensFeatureService, LensFeatureService>();
+builder.Services.AddScoped<ILensIndexService, LensIndexService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPreorderService, PreorderService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
@@ -96,6 +110,9 @@ builder.Services.AddScoped<IComplaintRequestService, ComplaintRequestService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
+builder.Services.AddScoped<IProductReviewService, ProductReviewService>();
+builder.Services.AddScoped<IPreorderCampaignService, PreorderCampaignService>();
+builder.Services.AddScoped<IShippingService, ShippingService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");

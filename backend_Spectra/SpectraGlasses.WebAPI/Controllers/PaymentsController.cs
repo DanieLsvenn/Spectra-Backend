@@ -130,8 +130,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 {
                     PaymentId = payment.PaymentId,
                     Amount = payment.Amount ?? 0,
-                    OrderInfo = request.OrderId.HasValue 
-                        ? $"Payment for Order {request.OrderId}" 
+                    OrderInfo = request.OrderId.HasValue
+                        ? $"Payment for Order {request.OrderId}"
                         : $"Payment for Preorder {request.PreorderId}",
                     IpAddress = GetClientIpAddress(),
                     ReturnUrl = returnUrl
@@ -213,14 +213,14 @@ namespace SpectraGlasses.WebAPI.Controllers
         #region VNPay Callback Endpoints
 
         /// <summary>
-        /// VNPay return URL handler
+        /// VNPay return URL handler - redirects to frontend thank-you page
         /// </summary>
         [HttpGet("vnpay-return")]
         [AllowAnonymous]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> VnPayReturn([FromQuery] VnPayReturnRequest request)
         {
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
+
             // Convert query parameters to dictionary
             var vnpayData = new Dictionary<string, string>();
             foreach (var query in Request.Query)
@@ -232,11 +232,8 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             if (!callbackResult.Success)
             {
-                return BadRequest(new ErrorResponse
-                {
-                    ErrorCode = "PAYMENT_FAILED",
-                    Message = callbackResult.Message
-                });
+                var failureUrl = $"{frontendUrl}/payment/return?vnp_ResponseCode=99&message={Uri.EscapeDataString(callbackResult.Message)}";
+                return Redirect(failureUrl);
             }
 
             // Complete the payment
@@ -246,23 +243,13 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             if (payment == null)
             {
-                return BadRequest(new ErrorResponse
-                {
-                    ErrorCode = "PAYMENT_COMPLETION_FAILED",
-                    Message = "Failed to complete payment"
-                });
+                var errorUrl = $"{frontendUrl}/payment/return?vnp_ResponseCode=99&message={Uri.EscapeDataString("Failed to complete payment")}";
+                return Redirect(errorUrl);
             }
 
-            // Return success response (or redirect to frontend success page)
-            return Ok(new
-            {
-                Success = true,
-                Message = "Payment completed successfully",
-                PaymentId = payment.PaymentId,
-                TransactionId = callbackResult.TransactionId,
-                Amount = payment.Amount,
-                PaidAt = payment.PaidAt
-            });
+            // Redirect to frontend thank-you page with payment details
+            var successUrl = $"{frontendUrl}/payment/return?vnp_ResponseCode=00&paymentId={payment.PaymentId}&transactionId={Uri.EscapeDataString(callbackResult.TransactionId)}&amount={payment.Amount}";
+            return Redirect(successUrl);
         }
 
         /// <summary>

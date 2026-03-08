@@ -19,13 +19,19 @@ public partial class OrderItem
 
     public Guid? LensTypeId { get; set; }
 
+    public Guid? LensIndexId { get; set; }
+
     public int? Quantity { get; set; }
 
-    public double? OrderPrice { get; set; }
+    public double? UnitPrice { get; set; }
 
-    public string SelectedColor { get; set; }
+    public Guid? SelectedColorId { get; set; }
+
+    public string SelectedSize { get; set; }
 
     public virtual ICollection<ComplaintRequest> ComplaintRequests { get; set; } = new List<ComplaintRequest>();
+
+    public virtual ICollection<ProductReview> ProductReviews { get; set; } = new List<ProductReview>();
 
     public virtual LensFeature Feature { get; set; }
 
@@ -33,7 +39,11 @@ public partial class OrderItem
 
     public virtual LensType LensType { get; set; }
 
+    public virtual LensIndex LensIndex { get; set; }
+
     public virtual Order Order { get; set; }
 
     public virtual Prescription Prescription { get; set; }
+
+    public virtual Color SelectedColor { get; set; }
 }

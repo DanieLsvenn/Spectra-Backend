@@ -11,11 +11,9 @@ public partial class Frame
 
     public string FrameName { get; set; }
 
-    public string Brand { get; set; }
+    public Guid? BrandId { get; set; }
 
-    public string Color { get; set; }
-
-    public string Material { get; set; }
+    public Guid? MaterialId { get; set; }
 
     public int? LensWidth { get; set; }
 
@@ -43,9 +41,21 @@ public partial class Frame
     /// </summary>
     public int? ReorderLevel { get; set; }
 
+    public virtual Brand Brand { get; set; }
+
+    public virtual Material Material { get; set; }
+
+    public virtual ICollection<FrameSize> FrameSizes { get; set; } = new List<FrameSize>();
+
+    public virtual ICollection<FrameColor> FrameColors { get; set; } = new List<FrameColor>();
+
     public virtual ICollection<FrameMedium> FrameMedia { get; set; } = new List<FrameMedium>();
 
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 
     public virtual ICollection<PreorderItem> PreorderItems { get; set; } = new List<PreorderItem>();
+
+    public virtual ICollection<ProductReview> ProductReviews { get; set; } = new List<ProductReview>();
+
+    public virtual ICollection<CampaignFrame> CampaignFrames { get; set; } = new List<CampaignFrame>();
 }
