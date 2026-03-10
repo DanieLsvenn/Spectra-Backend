@@ -39,15 +39,16 @@
         public string FrameName { get; set; } = string.Empty;
         public Guid? BrandId { get; set; }
         public Guid? MaterialId { get; set; }
+        public Guid? ShapeId { get; set; }
         public int? LensWidth { get; set; }
         public int? BridgeWidth { get; set; }
         public int? FrameWidth { get; set; }
         public int? TempleLength { get; set; }
-        public string? Shape { get; set; }
         public string? Size { get; set; }
         public double? BasePrice { get; set; }
         public int? StockQuantity { get; set; }
         public int? ReorderLevel { get; set; }
+        public List<Guid>? ColorIds { get; set; }
     }
 
     public class UpdateFrameRequest
@@ -55,16 +56,17 @@
         public string? FrameName { get; set; }
         public Guid? BrandId { get; set; }
         public Guid? MaterialId { get; set; }
+        public Guid? ShapeId { get; set; }
         public int? LensWidth { get; set; }
         public int? BridgeWidth { get; set; }
         public int? FrameWidth { get; set; }
         public int? TempleLength { get; set; }
-        public string? Shape { get; set; }
         public string? Size { get; set; }
         public double? BasePrice { get; set; }
         public string? Status { get; set; }
         public int? StockQuantity { get; set; }
         public int? ReorderLevel { get; set; }
+        public List<Guid>? ColorIds { get; set; }
     }
 
     public class FrameValidationResult
@@ -482,6 +484,20 @@
     public class UpdateMaterialRequest
     {
         public string? MaterialName { get; set; }
+    }
+
+    #endregion
+
+    #region Shape Models
+
+    public class CreateShapeRequest
+    {
+        public string ShapeName { get; set; } = string.Empty;
+    }
+
+    public class UpdateShapeRequest
+    {
+        public string? ShapeName { get; set; }
     }
 
     #endregion

@@ -141,11 +141,11 @@ namespace SpectraGlasses.WebAPI.Controllers
                 FrameName = request.FrameName,
                 BrandId = request.BrandId,
                 MaterialId = request.MaterialId,
+                ShapeId = request.ShapeId,
                 LensWidth = request.LensWidth,
                 BridgeWidth = request.BridgeWidth,
                 FrameWidth = request.FrameWidth,
                 TempleLength = request.TempleLength,
-                Shape = request.Shape,
                 Size = request.Size,
                 BasePrice = request.BasePrice,
                 StockQuantity = request.StockQuantity ?? 0,
@@ -154,10 +154,19 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             var createdFrame = await _frameService.CreateFrameAsync(frame);
 
+            // Set frame colors if provided
+            if (request.ColorIds != null && request.ColorIds.Count > 0)
+            {
+                await _frameService.SetFrameColorsAsync(createdFrame.FrameId, request.ColorIds);
+            }
+
+            // Re-fetch with full includes
+            var result = await _frameService.GetFrameByIdForManagerAsync(createdFrame.FrameId);
+
             return CreatedAtAction(
                 nameof(GetFrameById),
                 new { id = createdFrame.FrameId },
-                createdFrame
+                result
             );
         }
 
@@ -212,11 +221,11 @@ namespace SpectraGlasses.WebAPI.Controllers
                 FrameName = request.FrameName,
                 BrandId = request.BrandId,
                 MaterialId = request.MaterialId,
+                ShapeId = request.ShapeId,
                 LensWidth = request.LensWidth,
                 BridgeWidth = request.BridgeWidth,
                 FrameWidth = request.FrameWidth,
                 TempleLength = request.TempleLength,
-                Shape = request.Shape,
                 Size = request.Size,
                 BasePrice = request.BasePrice,
                 Status = request.Status,
@@ -235,7 +244,16 @@ namespace SpectraGlasses.WebAPI.Controllers
                 });
             }
 
-            return Ok(result);
+            // Update frame colors if provided
+            if (request.ColorIds != null)
+            {
+                await _frameService.SetFrameColorsAsync(id, request.ColorIds);
+            }
+
+            // Re-fetch with full includes
+            var fullResult = await _frameService.GetFrameByIdForManagerAsync(id);
+
+            return Ok(fullResult);
         }
 
         /// <summary>

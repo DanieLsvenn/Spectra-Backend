@@ -44,7 +44,7 @@ namespace Services.GlassesService
         Task SetFrameSizesAsync(Guid frameId, List<string> sizes);
 
         // Validation
-        FrameValidationResult ValidateFrameSizeAttributes(int? lensWidth, int? bridgeWidth, int? frameWidth, int? templeLength, string? shape = null, string? size = null);
+        FrameValidationResult ValidateFrameSizeAttributes(int? lensWidth, int? bridgeWidth, int? frameWidth, int? templeLength, string? size = null);
     }
 
     public class FrameService : IFrameService
@@ -69,7 +69,6 @@ namespace Services.GlassesService
         private const int MinTempleLength = 115;
         private const int MaxTempleLength = 155;
 
-        private static readonly string[] ValidShapes = { "square", "rectangle", "round", "oval", "cat-eye", "aviator", "browline", "geometric", "wrap" };
         private static readonly string[] ValidSizes = { "small", "medium", "large", "extra-large" };
 
         public FrameService(
@@ -90,13 +89,27 @@ namespace Services.GlassesService
 
         #region Public Read Operations
 
+        /// <summary>
+        /// Builds an IQueryable for Frame with all navigation properties eagerly loaded,
+        /// including nested Color inside FrameColors.
+        /// Uses AsNoTracking to prevent EF navigation fixup from wiring inverse collections
+        /// (e.g. Brand.Frames, Shape.Frames) which causes deep object graphs that fail serialization.
+        /// </summary>
+        private IQueryable<Frame> GetFrameQueryWithIncludes()
+        {
+            return _frameRepository.GetSet()
+                .AsNoTracking()
+                .Include(f => f.FrameMedia)
+                .Include(f => f.Brand)
+                .Include(f => f.Material)
+                .Include(f => f.Shape)
+                .Include(f => f.FrameColors)
+                    .ThenInclude(fc => fc.Color);
+        }
+
         public async Task<PaginationResult<Frame>> GetAvailableFramesAsync(int currentPage = 1, int pageSize = 10)
         {
-            var allFrames = await _frameRepository.GetAllAsyncInclude(
-                f => f.FrameMedia,
-                f => f.Brand,
-                f => f.Material,
-                f => f.FrameColors);
+            var allFrames = await GetFrameQueryWithIncludes().ToListAsync();
 
             // Determine which out-of-stock frames are in active preorder campaigns
             var activeCampaignFrameIds = await GetActiveCampaignFrameIdsAsync();
@@ -135,13 +148,8 @@ namespace Services.GlassesService
 
         public async Task<Frame?> GetFrameByIdAsync(Guid frameId)
         {
-            var frame = await _frameRepository.GetByIdAsyncInclude(
-                frameId,
-                f => f.FrameMedia,
-                f => f.Brand,
-                f => f.Material,
-                f => f.FrameColors
-            );
+            var frame = await GetFrameQueryWithIncludes()
+                .FirstOrDefaultAsync(f => f.FrameId == frameId);
 
             if (frame == null)
                 return null;
@@ -180,27 +188,18 @@ namespace Services.GlassesService
 
         /// <summary>
         /// Returns the set of FrameIds that belong to currently active preorder campaigns.
-        /// If the campaign tables don't exist yet (pre-migration), returns an empty set.
         /// </summary>
         private async Task<HashSet<Guid>> GetActiveCampaignFrameIdsAsync()
         {
-            try
-            {
-                var now = DateTime.UtcNow;
-                var allCampaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
-                return allCampaigns
-                    .Where(c => c.StartDate <= now && c.EndDate >= now &&
-                                (c.Status == "upcoming" || c.Status == "active"))
-                    .SelectMany(c => c.CampaignFrames)
-                    .Where(cf => cf.FrameId.HasValue)
-                    .Select(cf => cf.FrameId!.Value)
-                    .ToHashSet();
-            }
-            catch
-            {
-                // Campaign tables may not exist yet – treat as no active campaigns
-                return new HashSet<Guid>();
-            }
+            var now = DateTime.UtcNow;
+            var allCampaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
+            return allCampaigns
+                .Where(c => c.StartDate <= now && c.EndDate >= now &&
+                            (c.Status == "upcoming" || c.Status == "active"))
+                .SelectMany(c => c.CampaignFrames)
+                .Where(cf => cf.FrameId.HasValue)
+                .Select(cf => cf.FrameId!.Value)
+                .ToHashSet();
         }
 
         #endregion
@@ -209,11 +208,7 @@ namespace Services.GlassesService
 
         public async Task<PaginationResult<Frame>> GetAllFramesAsync(int currentPage = 1, int pageSize = 10)
         {
-            var allFrames = await _frameRepository.GetAllAsyncInclude(
-                f => f.FrameMedia,
-                f => f.Brand,
-                f => f.Material,
-                f => f.FrameColors);
+            var allFrames = await GetFrameQueryWithIncludes().ToListAsync();
 
             var orderedFrames = allFrames
                 .OrderBy(f => f.FrameName)
@@ -238,13 +233,8 @@ namespace Services.GlassesService
 
         public async Task<Frame?> GetFrameByIdForManagerAsync(Guid frameId)
         {
-            return await _frameRepository.GetByIdAsyncInclude(
-                frameId,
-                f => f.FrameMedia,
-                f => f.Brand,
-                f => f.Material,
-                f => f.FrameColors
-            );
+            return await GetFrameQueryWithIncludes()
+                .FirstOrDefaultAsync(f => f.FrameId == frameId);
         }
 
         public async Task<Frame> CreateFrameAsync(Frame frame)
@@ -274,6 +264,9 @@ namespace Services.GlassesService
             if (updatedFrame.MaterialId.HasValue)
                 existingFrame.MaterialId = updatedFrame.MaterialId;
 
+            if (updatedFrame.ShapeId.HasValue)
+                existingFrame.ShapeId = updatedFrame.ShapeId;
+
             if (updatedFrame.LensWidth.HasValue)
                 existingFrame.LensWidth = updatedFrame.LensWidth;
 
@@ -285,9 +278,6 @@ namespace Services.GlassesService
 
             if (updatedFrame.TempleLength.HasValue)
                 existingFrame.TempleLength = updatedFrame.TempleLength;
-
-            if (updatedFrame.Shape != null)
-                existingFrame.Shape = updatedFrame.Shape;
 
             if (updatedFrame.Size != null)
                 existingFrame.Size = updatedFrame.Size;
@@ -463,7 +453,6 @@ namespace Services.GlassesService
             int? bridgeWidth,
             int? frameWidth,
             int? templeLength,
-            string? shape = null,
             string? size = null)
         {
             var result = new FrameValidationResult { IsValid = true };
@@ -520,16 +509,6 @@ namespace Services.GlassesService
             {
                 result.IsValid = false;
                 result.Errors.Add("Bridge width must be less than lens width");
-            }
-
-            // Task 5: Shape validation
-            if (!string.IsNullOrEmpty(shape))
-            {
-                if (!ValidShapes.Contains(shape.ToLower()))
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Invalid shape. Allowed values: {string.Join(", ", ValidShapes)}");
-                }
             }
 
             // Task 5: Size validation

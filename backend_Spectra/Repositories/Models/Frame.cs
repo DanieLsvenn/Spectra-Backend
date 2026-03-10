@@ -15,6 +15,8 @@ public partial class Frame
 
     public Guid? MaterialId { get; set; }
 
+    public Guid? ShapeId { get; set; }
+
     public int? LensWidth { get; set; }
 
     public int? BridgeWidth { get; set; }
@@ -22,8 +24,6 @@ public partial class Frame
     public int? FrameWidth { get; set; }
 
     public int? TempleLength { get; set; }
-
-    public string Shape { get; set; }
 
     public string Size { get; set; }
 
@@ -44,6 +44,8 @@ public partial class Frame
     public virtual Brand Brand { get; set; }
 
     public virtual Material Material { get; set; }
+
+    public virtual Shape Shape { get; set; }
 
     public virtual ICollection<FrameSize> FrameSizes { get; set; } = new List<FrameSize>();
 

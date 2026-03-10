@@ -24,6 +24,8 @@ public partial class Context : DbContext
 
     public virtual DbSet<Color> Colors { get; set; }
 
+    public virtual DbSet<Shape> Shapes { get; set; }
+
     public virtual DbSet<FrameColor> FrameColors { get; set; }
 
     public virtual DbSet<FrameSize> FrameSizes { get; set; }
@@ -140,6 +142,27 @@ public partial class Context : DbContext
                 .HasMaxLength(7)
                 .IsUnicode(false)
                 .HasColumnName("hexCode");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("active")
+                .HasColumnName("status");
+        });
+
+        modelBuilder.Entity<Shape>(entity =>
+        {
+            entity.HasKey(e => e.ShapeId);
+
+            entity.ToTable("SHAPE");
+
+            entity.Property(e => e.ShapeId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("shapeId");
+            entity.Property(e => e.ShapeName)
+                .IsRequired()
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("shapeName");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -302,10 +325,7 @@ public partial class Context : DbContext
                 .HasColumnName("frameName");
             entity.Property(e => e.FrameWidth).HasColumnName("frameWidth");
             entity.Property(e => e.LensWidth).HasColumnName("lensWidth");
-            entity.Property(e => e.Shape)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("shape");
+            entity.Property(e => e.ShapeId).HasColumnName("shapeId");
             entity.Property(e => e.Size)
                 .HasMaxLength(50)
                 .IsUnicode(false)
@@ -331,6 +351,10 @@ public partial class Context : DbContext
             entity.HasOne(d => d.Material).WithMany(p => p.Frames)
                 .HasForeignKey(d => d.MaterialId)
                 .HasConstraintName("FK_FRAME_MATERIAL");
+
+            entity.HasOne(d => d.Shape).WithMany(p => p.Frames)
+                .HasForeignKey(d => d.ShapeId)
+                .HasConstraintName("FK_FRAME_SHAPE");
         });
 
         modelBuilder.Entity<FrameMedium>(entity =>

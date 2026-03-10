@@ -182,7 +182,9 @@ namespace Services.GlassesService
                 // Validate frame exists and is available
                 if (item.FrameId.HasValue)
                 {
-                    var frames = await _frameRepository.SearchAsync(f => f.FrameId == item.FrameId);
+                    var frames = await _frameRepository.SearchAsyncInclude(
+                        f => f.FrameId == item.FrameId,
+                        f => f.FrameColors);
                     var frame = frames.FirstOrDefault();
 
                     if (frame == null)

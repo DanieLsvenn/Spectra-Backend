@@ -77,6 +77,7 @@ builder.Services.AddScoped<GenericRepository<FrameSize>>();
 builder.Services.AddScoped<GenericRepository<Brand>>();
 builder.Services.AddScoped<GenericRepository<Material>>();
 builder.Services.AddScoped<GenericRepository<Color>>();
+builder.Services.AddScoped<GenericRepository<Shape>>();
 builder.Services.AddScoped<GenericRepository<LensType>>();
 builder.Services.AddScoped<GenericRepository<LensFeature>>();
 builder.Services.AddScoped<GenericRepository<LensIndex>>();
@@ -99,6 +100,7 @@ builder.Services.AddScoped<IFrameMediaService, FrameMediaService>();
 builder.Services.AddScoped<IBrandService, BrandService>();
 builder.Services.AddScoped<IMaterialService, MaterialService>();
 builder.Services.AddScoped<IColorService, ColorService>();
+builder.Services.AddScoped<IShapeService, ShapeService>();
 builder.Services.AddScoped<ILensTypeService, LensTypeService>();
 builder.Services.AddScoped<ILensFeatureService, LensFeatureService>();
 builder.Services.AddScoped<ILensIndexService, LensIndexService>();
@@ -189,9 +191,8 @@ app.UseExceptionHandler(errorApp =>
             await context.Response.WriteAsJsonAsync(new
             {
                 ErrorCode = "INTERNAL_ERROR",
-                Message = app.Environment.IsDevelopment() 
-                    ? error.Error.Message 
-                    : "An internal server error occurred"
+                Message = error.Error.Message,
+                Detail = error.Error.InnerException?.Message
             }, jsonSerializerOptions);
         }
     });
