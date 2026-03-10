@@ -427,3 +427,309 @@ Roles allowed: `manager`
 All fields are optional. Only provided fields will be updated. `status` if provided must be one of: `available`, `inactive`, `out_of_stock`. `shapeId` references the SHAPE table. `colorIds` replaces all existing frame colors (first color becomes default).
 
 Response 200: Updated frame object (includes `brand`, `material`, `shape`, `frameColors` with nested `color`).
+
+---
+
+## 4. SHIPPING
+
+Shipping integrates with [GoShip](https://doc.goship.io) — a Vietnamese shipping aggregator — to provide real carrier rates, shipment creation, and tracking. Local helper endpoints are also available for simple fee calculations.
+
+### Typical Flow
+
+1. **Get rates** — `POST /api/Shipping/goship/rates` with sender/receiver addresses and parcel info ? returns available carriers with prices
+2. **User picks a rate** during checkout
+3. **Create shipment** — `POST /api/Shipping/goship/shipments` with the chosen `rateId` (and optional `orderId` to auto-assign tracking)
+4. **Track shipment** — `GET /api/Shipping/goship/shipments/{shipmentId}`
+
+---
+
+### GET /api/Shipping/methods
+
+Gets all available local shipping methods and their base fees.
+
+Roles allowed: Public (no authentication required)
+
+Response 200:
+```json
+{
+  "method": "standard",
+  "fee": 5.0,
+  "description": "Standard Shipping (5-7 business days)"
+}
+```
+
+---
+
+### POST /api/Shipping/calculate
+
+Calculates the shipping fee for a given method and order subtotal. Orders above the free-shipping threshold (default 89.0) get free shipping.
+
+Roles allowed: Public (no authentication required)
+
+Request body:
+```json
+{
+  "shippingMethod": "standard",
+  "orderSubtotal": 120.0
+}
+```
+
+Response 200:
+```json
+{
+  "shippingMethod": "standard",
+  "orderSubtotal": 120.0,
+  "shippingFee": 0,
+  "total": 120.0
+}
+```
+
+---
+
+### POST /api/Shipping/goship/rates
+
+Gets available shipping rates from GoShip for the given sender/receiver addresses and parcel details. This calls the GoShip `POST /rates` API.
+
+Roles allowed: Public (no authentication required)
+
+Request body:
+```json
+{
+  "addressFrom": {
+    "name": "Spectra Store",
+    "phone": "0901234567",
+    "street": "123 Nguy?n Hu?",
+    "ward": "Ph??ng B?n Nghé",
+    "district": "Qu?n 1",
+    "city": "H? Chí Minh"
+  },
+  "addressTo": {
+    "name": "Nguy?n V?n A",
+    "phone": "0987654321",
+    "street": "456 Lê L?i",
+    "ward": "Ph??ng 1",
+    "district": "Qu?n 3",
+    "city": "H? Chí Minh"
+  },
+  "parcel": {
+    "cod": 0,
+    "weight": 500,
+    "width": 20,
+    "height": 10,
+    "length": 15,
+    "metadata": ""
+  }
+}
+```
+
+Field notes:
+- `cod` — Cash on delivery amount (in VND), set to `0` if not applicable
+- `weight` — Parcel weight in grams
+- `width`, `height`, `length` — Dimensions in centimeters
+
+Response 200:
+```json
+{
+  "code": 200,
+  "status": "success",
+  "data": [
+    {
+      "id": "rate_abc123",
+      "carrier_name": "Giao Hàng Nhanh",
+      "carrier_logo": "https://...",
+      "service": "Express",
+      "total_fee": 25000,
+      "total_fee_after_discount": 22000,
+      "expected": "2-3 days"
+    },
+    {
+      "id": "rate_def456",
+      "carrier_name": "Viettel Post",
+      "carrier_logo": "https://...",
+      "service": "Standard",
+      "total_fee": 18000,
+      "total_fee_after_discount": 18000,
+      "expected": "3-5 days"
+    }
+  ]
+}
+```
+
+Response 502:
+```json
+{
+  "errorCode": "GOSHIP_ERROR",
+  "message": "Failed to retrieve rates from GoShip"
+}
+```
+
+---
+
+### POST /api/Shipping/goship/shipments
+
+Creates a shipment on GoShip using a rate ID obtained from the rates endpoint. Optionally links the shipment to an existing order by providing `orderId`, which auto-assigns the tracking number and carrier to the order.
+
+Roles allowed: `manager`
+
+Request body:
+```json
+{
+  "rateId": "rate_abc123",
+  "orderId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "addressFrom": {
+    "name": "Spectra Store",
+    "phone": "0901234567",
+    "street": "123 Nguy?n Hu?",
+    "ward": "Ph??ng B?n Nghé",
+    "district": "Qu?n 1",
+    "city": "H? Chí Minh"
+  },
+  "addressTo": {
+    "name": "Nguy?n V?n A",
+    "phone": "0987654321",
+    "street": "456 Lê L?i",
+    "ward": "Ph??ng 1",
+    "district": "Qu?n 3",
+    "city": "H? Chí Minh"
+  },
+  "parcel": {
+    "cod": 0,
+    "weight": 500,
+    "width": 20,
+    "height": 10,
+    "length": 15,
+    "metadata": ""
+  }
+}
+```
+
+Validation:
+- `rateId` is required — must be a valid rate ID from `POST /api/Shipping/goship/rates`
+- `orderId` is optional — if provided, tracking number and carrier are auto-assigned to the order, and order status changes from `processing` to `shipped`
+
+Response 200 (with `orderId`):
+```json
+{
+  "orderId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "trackingNumber": "GHN123456789",
+  "shippingCarrier": "Giao Hàng Nhanh",
+  "shippedAt": "2025-01-15T10:30:00Z",
+  "status": "shipped"
+}
+```
+
+Response 200 (without `orderId`):
+```json
+{
+  "code": 200,
+  "status": "success",
+  "data": {
+    "id": "shipment_xyz789",
+    "tracking_number": "GHN123456789",
+    "carrier": "Giao Hàng Nhanh",
+    "status": "created",
+    "rate": "rate_abc123",
+    "price": 22000,
+    "created_at": "2025-01-15T10:30:00Z"
+  }
+}
+```
+
+Response 400:
+```json
+{
+  "errorCode": "VALIDATION_ERROR",
+  "message": "RateId is required. Call GET /goship/rates first."
+}
+```
+
+Response 502:
+```json
+{
+  "errorCode": "GOSHIP_ERROR",
+  "message": "Failed to create shipment on GoShip or order not found"
+}
+```
+
+---
+
+### GET /api/Shipping/goship/shipments/{shipmentId}
+
+Gets shipment tracking details from GoShip.
+
+Roles allowed: Public (no authentication required)
+
+Path parameter `shipmentId`: The GoShip shipment ID (string).
+
+Response 200:
+```json
+{
+  "code": 200,
+  "status": "success",
+  "data": {
+    "id": "shipment_xyz789",
+    "tracking_number": "GHN123456789",
+    "carrier": "Giao Hàng Nhanh",
+    "status": "in_transit",
+    "rate": "rate_abc123",
+    "price": 22000,
+    "created_at": "2025-01-15T10:30:00Z"
+  }
+}
+```
+
+Response 404:
+```json
+{
+  "errorCode": "SHIPMENT_NOT_FOUND",
+  "message": "Shipment not found on GoShip"
+}
+```
+
+---
+
+### PATCH /api/Shipping/orders/{orderId}/tracking
+
+Manually assigns a tracking number and carrier to an order. Use this for manual tracking assignment without going through GoShip.
+
+Roles allowed: `manager`
+
+Path parameter `orderId`: GUID of the order.
+
+Request body:
+```json
+{
+  "trackingNumber": "VTP987654321",
+  "carrier": "Viettel Post"
+}
+```
+
+Validation:
+- `trackingNumber` is required, must not be empty
+- `carrier` is required, must not be empty
+
+Response 200:
+```json
+{
+  "orderId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "trackingNumber": "VTP987654321",
+  "shippingCarrier": "Viettel Post",
+  "shippedAt": "2025-01-15T10:30:00Z",
+  "status": "shipped"
+}
+```
+
+Response 400:
+```json
+{
+  "errorCode": "VALIDATION_ERROR",
+  "message": "Tracking number is required"
+}
+```
+
+Response 404:
+```json
+{
+  "errorCode": "ORDER_NOT_FOUND",
+  "message": "Order not found"
+}

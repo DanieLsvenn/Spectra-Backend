@@ -30,6 +30,12 @@ builder.Services.AddControllers()
     });
 // Add HttpClient for Firebase authentication
 builder.Services.AddHttpClient();
+// Register named HttpClient for GoShip API
+builder.Services.AddHttpClient("GoShip", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["GoShip:BaseUrl"] ?? "https://sandbox.goship.io/api/v2");
+    client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+});
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

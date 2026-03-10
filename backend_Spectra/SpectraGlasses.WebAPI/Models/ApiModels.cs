@@ -610,5 +610,41 @@
         public string Carrier { get; set; } = string.Empty;
     }
 
+    public class GoShipAddressApiModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Street { get; set; } = string.Empty;
+        public string Ward { get; set; } = string.Empty;
+        public string District { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+    }
+
+    public class GoShipParcelApiModel
+    {
+        public int Cod { get; set; }
+        public int Weight { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public int Length { get; set; }
+        public string Metadata { get; set; } = string.Empty;
+    }
+
+    public class GoShipRateApiRequest
+    {
+        public Services.GlassesService.GoShipAddress AddressFrom { get; set; } = new();
+        public Services.GlassesService.GoShipAddress AddressTo { get; set; } = new();
+        public Services.GlassesService.GoShipParcel Parcel { get; set; } = new();
+    }
+
+    public class CreateGoShipShipmentApiRequest
+    {
+        public string RateId { get; set; } = string.Empty;
+        public Guid? OrderId { get; set; }
+        public Services.GlassesService.GoShipAddress AddressFrom { get; set; } = new();
+        public Services.GlassesService.GoShipAddress AddressTo { get; set; } = new();
+        public Services.GlassesService.GoShipParcel Parcel { get; set; } = new();
+    }
+
     #endregion
 }
