@@ -44,6 +44,8 @@ namespace Services.GlassesService
         private readonly GenericRepository<Order> _orderRepository;
         private readonly GenericRepository<OrderItem> _orderItemRepository;
         private readonly GenericRepository<Frame> _frameRepository;
+        private readonly GenericRepository<FrameColor> _frameColorRepository;
+        private readonly GenericRepository<FrameLensType> _frameLensTypeRepository;
         private readonly GenericRepository<LensType> _lensTypeRepository;
         private readonly GenericRepository<LensFeature> _lensFeatureRepository;
         private readonly GenericRepository<LensIndex> _lensIndexRepository;
@@ -76,6 +78,8 @@ namespace Services.GlassesService
             GenericRepository<Order> orderRepository,
             GenericRepository<OrderItem> orderItemRepository,
             GenericRepository<Frame> frameRepository,
+            GenericRepository<FrameColor> frameColorRepository,
+            GenericRepository<FrameLensType> frameLensTypeRepository,
             GenericRepository<LensType> lensTypeRepository,
             GenericRepository<LensFeature> lensFeatureRepository,
             GenericRepository<LensIndex> lensIndexRepository,
@@ -85,6 +89,8 @@ namespace Services.GlassesService
             _orderRepository = orderRepository;
             _orderItemRepository = orderItemRepository;
             _frameRepository = frameRepository;
+            _frameColorRepository = frameColorRepository;
+            _frameLensTypeRepository = frameLensTypeRepository;
             _lensTypeRepository = lensTypeRepository;
             _lensFeatureRepository = lensFeatureRepository;
             _lensIndexRepository = lensIndexRepository;
@@ -115,8 +121,12 @@ namespace Services.GlassesService
                 item.UnitPrice = await CalculateItemPriceAsync(item);
                 await _orderItemRepository.CreateAsync(item);
 
-                // Deduct stock for each frame
-                if (item.FrameId.HasValue)
+                // Deduct stock per color variant
+                if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
+                {
+                    await DeductVariantStockAsync(item.FrameId.Value, item.SelectedColorId.Value, item.Quantity ?? 1);
+                }
+                else if (item.FrameId.HasValue)
                 {
                     await DeductFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
                 }
@@ -146,6 +156,23 @@ namespace Services.GlassesService
             }
         }
 
+        private async Task DeductVariantStockAsync(Guid frameId, Guid colorId, int quantity)
+        {
+            var variants = await _frameColorRepository.SearchAsync(
+                fc => fc.FrameId == frameId && fc.ColorId == colorId);
+            var variant = variants.FirstOrDefault();
+
+            if (variant != null)
+            {
+                var currentStock = variant.StockQuantity ?? 0;
+                variant.StockQuantity = Math.Max(0, currentStock - quantity);
+                await _frameColorRepository.UpdateAsync(variant);
+            }
+
+            // Also update frame-level stock
+            await RecalculateFrameStockAsync(frameId);
+        }
+
         private async Task RestoreFrameStockAsync(Guid frameId, int quantity)
         {
             var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
@@ -166,6 +193,46 @@ namespace Services.GlassesService
             }
         }
 
+        private async Task RestoreVariantStockAsync(Guid frameId, Guid colorId, int quantity)
+        {
+            var variants = await _frameColorRepository.SearchAsync(
+                fc => fc.FrameId == frameId && fc.ColorId == colorId);
+            var variant = variants.FirstOrDefault();
+
+            if (variant != null)
+            {
+                var currentStock = variant.StockQuantity ?? 0;
+                variant.StockQuantity = currentStock + quantity;
+                await _frameColorRepository.UpdateAsync(variant);
+            }
+
+            // Also update frame-level stock
+            await RecalculateFrameStockAsync(frameId);
+        }
+
+        private async Task RecalculateFrameStockAsync(Guid frameId)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            if (frame == null) return;
+
+            var allVariants = await _frameColorRepository.SearchAsync(fc => fc.FrameId == frameId);
+            var totalStock = allVariants.Sum(v => v.StockQuantity ?? 0);
+
+            frame.StockQuantity = totalStock;
+
+            if (totalStock <= 0)
+            {
+                frame.Status = "out_of_stock";
+            }
+            else if (frame.Status?.ToLower() == "out_of_stock")
+            {
+                frame.Status = "available";
+            }
+
+            await _frameRepository.UpdateAsync(frame);
+        }
+
         public async Task<OrderValidationResult> ValidateOrderItemsAsync(List<OrderItem> orderItems, Guid userId)
         {
             var result = new OrderValidationResult { IsValid = true };
@@ -179,13 +246,15 @@ namespace Services.GlassesService
 
             foreach (var item in orderItems)
             {
+                Frame frame = null;
+
                 // Validate frame exists and is available
                 if (item.FrameId.HasValue)
                 {
                     var frames = await _frameRepository.SearchAsyncInclude(
                         f => f.FrameId == item.FrameId,
                         f => f.FrameColors);
-                    var frame = frames.FirstOrDefault();
+                    frame = frames.FirstOrDefault();
 
                     if (frame == null)
                     {
@@ -201,34 +270,68 @@ namespace Services.GlassesService
                         continue;
                     }
 
-                    // Validate stock availability
                     var requestedQuantity = item.Quantity ?? 1;
-                    var availableStock = frame.StockQuantity ?? 0;
-                    if (availableStock < requestedQuantity)
-                    {
-                        result.IsValid = false;
-                        if (availableStock <= 0)
-                        {
-                            result.Errors.Add($"Frame '{frame.FrameName}' is out of stock. Please use Preorder instead.");
-                        }
-                        else
-                        {
-                            result.Errors.Add($"Frame '{frame.FrameName}' only has {availableStock} in stock, but {requestedQuantity} requested");
-                        }
-                        continue;
-                    }
 
-                    // Validate selectedColor when frame has no colors assigned
-                    if (!frame.FrameColors.Any() && !item.SelectedColorId.HasValue)
+                    // Validate per-color variant stock if a color is selected
+                    if (item.SelectedColorId.HasValue)
                     {
-                        result.IsValid = false;
-                        result.Errors.Add($"Frame '{frame.FrameName}' requires a color selection");
+                        var variant = frame.FrameColors.FirstOrDefault(
+                            fc => fc.ColorId == item.SelectedColorId);
+
+                        if (variant == null)
+                        {
+                            result.IsValid = false;
+                            result.Errors.Add($"Color is not available for frame '{frame.FrameName}'");
+                            continue;
+                        }
+
+                        var variantStock = variant.StockQuantity ?? 0;
+                        if (variantStock < requestedQuantity)
+                        {
+                            result.IsValid = false;
+                            if (variantStock <= 0)
+                            {
+                                result.Errors.Add($"Frame '{frame.FrameName}' in the selected color is out of stock. Please choose a different color or use Preorder.");
+                            }
+                            else
+                            {
+                                result.Errors.Add($"Frame '{frame.FrameName}' in the selected color only has {variantStock} in stock, but {requestedQuantity} requested");
+                            }
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        // No color selected - validate frame-level stock
+                        var availableStock = frame.StockQuantity ?? 0;
+                        if (availableStock < requestedQuantity)
+                        {
+                            result.IsValid = false;
+                            if (availableStock <= 0)
+                            {
+                                result.Errors.Add($"Frame '{frame.FrameName}' is out of stock. Please use Preorder instead.");
+                            }
+                            else
+                            {
+                                result.Errors.Add($"Frame '{frame.FrameName}' only has {availableStock} in stock, but {requestedQuantity} requested");
+                            }
+                            continue;
+                        }
+
+                        // Require color selection if frame has colors defined
+                        if (frame.FrameColors.Any())
+                        {
+                            result.IsValid = false;
+                            result.Errors.Add($"Frame '{frame.FrameName}' requires a color selection. Available colors have individual stock levels.");
+                            continue;
+                        }
                     }
                 }
                 else
                 {
                     result.IsValid = false;
                     result.Errors.Add("Each order item must have a frame");
+                    continue;
                 }
 
                 // Validate lens type
@@ -242,6 +345,30 @@ namespace Services.GlassesService
                         result.IsValid = false;
                         result.Errors.Add($"Lens type with ID {item.LensTypeId} not found");
                         continue;
+                    }
+
+                    // Validate that the lens type is supported by this frame
+                    if (frame != null)
+                    {
+                        var supportedLensTypes = await _frameLensTypeRepository.SearchAsync(
+                            flt => flt.FrameId == frame.FrameId);
+                        var supportedIds = supportedLensTypes
+                            .Where(flt => flt.LensTypeId.HasValue)
+                            .Select(flt => flt.LensTypeId!.Value)
+                            .ToHashSet();
+
+                        // If the frame has supported lens types defined, validate against them
+                        // Single Vision and Non-Prescription are always allowed
+                        if (supportedIds.Any())
+                        {
+                            var isAlwaysAllowed = lensType.RequiresPrescription != true;
+                            if (!isAlwaysAllowed && !supportedIds.Contains(lensType.LensTypeId))
+                            {
+                                result.IsValid = false;
+                                result.Errors.Add($"Frame '{frame.FrameName}' does not support lens type '{lensType.LensSpecification}'. Please check the frame's supported lens types.");
+                                continue;
+                            }
+                        }
                     }
 
                     // Validate prescription requirement
@@ -273,6 +400,11 @@ namespace Services.GlassesService
                             result.IsValid = false;
                             result.Errors.Add("Prescription has expired");
                         }
+                        else if (frame != null)
+                        {
+                            // Validate prescription values against frame Rx/PD limits
+                            ValidatePrescriptionAgainstFrame(result, frame, prescription);
+                        }
                     }
                 }
 
@@ -298,6 +430,52 @@ namespace Services.GlassesService
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Validates a prescription's sphere and PD values against the frame's supported Rx/PD limits.
+        /// </summary>
+        private void ValidatePrescriptionAgainstFrame(OrderValidationResult result, Frame frame, Prescription prescription)
+        {
+            // Validate Sphere (Rx) limits
+            if (frame.MinRx.HasValue || frame.MaxRx.HasValue)
+            {
+                var sphereValues = new List<double?> { prescription.SphereLeft, prescription.SphereRight };
+                foreach (var sphere in sphereValues.Where(s => s.HasValue))
+                {
+                    if (frame.MinRx.HasValue && sphere < frame.MinRx)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription sphere value ({sphere}) is below the frame's minimum supported Rx ({frame.MinRx}). This frame cannot support your prescription.");
+                        return;
+                    }
+                    if (frame.MaxRx.HasValue && sphere > frame.MaxRx)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription sphere value ({sphere}) exceeds the frame's maximum supported Rx ({frame.MaxRx}). This frame cannot support your prescription.");
+                        return;
+                    }
+                }
+            }
+
+            // Validate Pupillary Distance (PD) limits
+            if (frame.MinPd.HasValue || frame.MaxPd.HasValue)
+            {
+                if (prescription.PupillaryDistance.HasValue)
+                {
+                    var pd = prescription.PupillaryDistance.Value;
+                    if (frame.MinPd.HasValue && pd < frame.MinPd)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription PD ({pd}mm) is below the frame's minimum supported PD ({frame.MinPd}mm). This frame cannot fit your pupillary distance.");
+                    }
+                    if (frame.MaxPd.HasValue && pd > frame.MaxPd)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription PD ({pd}mm) exceeds the frame's maximum supported PD ({frame.MaxPd}mm). This frame cannot fit your pupillary distance.");
+                    }
+                }
+            }
         }
 
         #endregion
@@ -454,7 +632,11 @@ namespace Services.GlassesService
                 {
                     foreach (var item in orderWithItems.OrderItems)
                     {
-                        if (item.FrameId.HasValue)
+                        if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
+                        {
+                            await RestoreVariantStockAsync(item.FrameId.Value, item.SelectedColorId.Value, item.Quantity ?? 1);
+                        }
+                        else if (item.FrameId.HasValue)
                         {
                             await RestoreFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
                         }

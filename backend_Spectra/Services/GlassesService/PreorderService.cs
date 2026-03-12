@@ -41,6 +41,7 @@ namespace Services.GlassesService
         private readonly GenericRepository<Order> _orderRepository;
         private readonly GenericRepository<OrderItem> _orderItemRepository;
         private readonly GenericRepository<Frame> _frameRepository;
+        private readonly GenericRepository<FrameLensType> _frameLensTypeRepository;
         private readonly GenericRepository<LensType> _lensTypeRepository;
         private readonly GenericRepository<LensFeature> _lensFeatureRepository;
         private readonly GenericRepository<LensIndex> _lensIndexRepository;
@@ -63,6 +64,7 @@ namespace Services.GlassesService
             GenericRepository<Order> orderRepository,
             GenericRepository<OrderItem> orderItemRepository,
             GenericRepository<Frame> frameRepository,
+            GenericRepository<FrameLensType> frameLensTypeRepository,
             GenericRepository<LensType> lensTypeRepository,
             GenericRepository<LensFeature> lensFeatureRepository,
             GenericRepository<LensIndex> lensIndexRepository,
@@ -74,6 +76,7 @@ namespace Services.GlassesService
             _orderRepository = orderRepository;
             _orderItemRepository = orderItemRepository;
             _frameRepository = frameRepository;
+            _frameLensTypeRepository = frameLensTypeRepository;
             _lensTypeRepository = lensTypeRepository;
             _lensFeatureRepository = lensFeatureRepository;
             _lensIndexRepository = lensIndexRepository;
@@ -122,13 +125,15 @@ namespace Services.GlassesService
 
             foreach (var item in preorderItems)
             {
+                Frame frame = null;
+
                 // Validate frame exists
                 if (item.FrameId.HasValue)
                 {
                     var frames = await _frameRepository.SearchAsyncInclude(
                         f => f.FrameId == item.FrameId,
                         f => f.FrameColors);
-                    var frame = frames.FirstOrDefault();
+                    frame = frames.FirstOrDefault();
 
                     if (frame == null)
                     {
@@ -138,8 +143,17 @@ namespace Services.GlassesService
                     }
 
                     // For preorders, frame doesn't need to be available (it's a preorder)
-                    // But validate selectedColor when frame has no colors assigned
-                    if (!frame.FrameColors.Any() && !item.SelectedColorId.HasValue)
+                    // But validate selectedColor is valid for the frame if colors are defined
+                    if (item.SelectedColorId.HasValue && frame.FrameColors.Any())
+                    {
+                        var validColor = frame.FrameColors.Any(fc => fc.ColorId == item.SelectedColorId);
+                        if (!validColor)
+                        {
+                            result.IsValid = false;
+                            result.Errors.Add($"Selected color is not available for frame '{frame.FrameName}'");
+                        }
+                    }
+                    else if (frame.FrameColors.Any() && !item.SelectedColorId.HasValue)
                     {
                         result.IsValid = false;
                         result.Errors.Add($"Frame '{frame.FrameName}' requires a color selection");
@@ -149,6 +163,7 @@ namespace Services.GlassesService
                 {
                     result.IsValid = false;
                     result.Errors.Add("Each preorder item must have a frame");
+                    continue;
                 }
 
                 // Validate lens type and prescription requirement
@@ -162,6 +177,28 @@ namespace Services.GlassesService
                         result.IsValid = false;
                         result.Errors.Add($"Lens type with ID {item.LensTypeId} not found");
                         continue;
+                    }
+
+                    // Validate that the lens type is supported by this frame
+                    if (frame != null)
+                    {
+                        var supportedLensTypes = await _frameLensTypeRepository.SearchAsync(
+                            flt => flt.FrameId == frame.FrameId);
+                        var supportedIds = supportedLensTypes
+                            .Where(flt => flt.LensTypeId.HasValue)
+                            .Select(flt => flt.LensTypeId!.Value)
+                            .ToHashSet();
+
+                        if (supportedIds.Any())
+                        {
+                            var isAlwaysAllowed = lensType.RequiresPrescription != true;
+                            if (!isAlwaysAllowed && !supportedIds.Contains(lensType.LensTypeId))
+                            {
+                                result.IsValid = false;
+                                result.Errors.Add($"Frame '{frame.FrameName}' does not support lens type '{lensType.LensSpecification}'. Please check the frame's supported lens types.");
+                                continue;
+                            }
+                        }
                     }
 
                     if (lensType.RequiresPrescription == true && !item.PrescriptionId.HasValue)
@@ -187,6 +224,11 @@ namespace Services.GlassesService
                         result.IsValid = false;
                         result.Errors.Add("Prescription does not belong to the current user");
                     }
+                    else if (frame != null)
+                    {
+                        // Validate prescription values against frame Rx/PD limits
+                        ValidatePrescriptionAgainstFrame(result, frame, prescription);
+                    }
                 }
 
                 // Validate quantity
@@ -198,6 +240,50 @@ namespace Services.GlassesService
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Validates a prescription's sphere and PD values against the frame's supported Rx/PD limits.
+        /// </summary>
+        private void ValidatePrescriptionAgainstFrame(OrderValidationResult result, Frame frame, Prescription prescription)
+        {
+            if (frame.MinRx.HasValue || frame.MaxRx.HasValue)
+            {
+                var sphereValues = new List<double?> { prescription.SphereLeft, prescription.SphereRight };
+                foreach (var sphere in sphereValues.Where(s => s.HasValue))
+                {
+                    if (frame.MinRx.HasValue && sphere < frame.MinRx)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription sphere value ({sphere}) is below the frame's minimum supported Rx ({frame.MinRx}). This frame cannot support your prescription.");
+                        return;
+                    }
+                    if (frame.MaxRx.HasValue && sphere > frame.MaxRx)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription sphere value ({sphere}) exceeds the frame's maximum supported Rx ({frame.MaxRx}). This frame cannot support your prescription.");
+                        return;
+                    }
+                }
+            }
+
+            if (frame.MinPd.HasValue || frame.MaxPd.HasValue)
+            {
+                if (prescription.PupillaryDistance.HasValue)
+                {
+                    var pd = prescription.PupillaryDistance.Value;
+                    if (frame.MinPd.HasValue && pd < frame.MinPd)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription PD ({pd}mm) is below the frame's minimum supported PD ({frame.MinPd}mm). This frame cannot fit your pupillary distance.");
+                    }
+                    if (frame.MaxPd.HasValue && pd > frame.MaxPd)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Prescription PD ({pd}mm) exceeds the frame's maximum supported PD ({frame.MaxPd}mm). This frame cannot fit your pupillary distance.");
+                    }
+                }
+            }
         }
 
         #endregion

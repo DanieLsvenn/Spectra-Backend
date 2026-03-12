@@ -70,8 +70,6 @@ namespace Services.GlassesService
         private readonly GenericRepository<FrameColor> _frameColorRepository;
         private readonly GenericRepository<FrameSize> _frameSizeRepository;
         private readonly GenericRepository<FrameLensType> _frameLensTypeRepository;
-        private readonly GenericRepository<CampaignFrame> _campaignFrameRepository;
-        private readonly GenericRepository<PreorderCampaign> _campaignRepository;
 
         private const string AvailableStatus = "available";
         private const string InactiveStatus = "inactive";
@@ -93,17 +91,13 @@ namespace Services.GlassesService
             GenericRepository<FrameMedium> frameMediaRepository,
             GenericRepository<FrameColor> frameColorRepository,
             GenericRepository<FrameSize> frameSizeRepository,
-            GenericRepository<FrameLensType> frameLensTypeRepository,
-            GenericRepository<CampaignFrame> campaignFrameRepository,
-            GenericRepository<PreorderCampaign> campaignRepository)
+            GenericRepository<FrameLensType> frameLensTypeRepository)
         {
             _frameRepository = frameRepository;
             _frameMediaRepository = frameMediaRepository;
             _frameColorRepository = frameColorRepository;
             _frameSizeRepository = frameSizeRepository;
             _frameLensTypeRepository = frameLensTypeRepository;
-            _campaignFrameRepository = campaignFrameRepository;
-            _campaignRepository = campaignRepository;
         }
 
         #region Public Read Operations
@@ -132,21 +126,9 @@ namespace Services.GlassesService
         {
             var allFrames = await GetFrameQueryWithIncludes().ToListAsync();
 
-            // Determine which out-of-stock frames are in active preorder campaigns
-            var activeCampaignFrameIds = await GetActiveCampaignFrameIdsAsync();
-
+            // Show all frames that are not inactive (available + out_of_stock)
             var availableFrames = allFrames
-                .Where(f =>
-                {
-                    if (IsAvailableStatus(f.Status))
-                        return true;
-
-                    // Show out-of-stock frames only if they are in an active preorder campaign
-                    if (string.Equals(f.Status, "out_of_stock", StringComparison.OrdinalIgnoreCase))
-                        return activeCampaignFrameIds.Contains(f.FrameId);
-
-                    return false;
-                })
+                .Where(f => !IsInactiveStatus(f.Status))
                 .OrderBy(f => f.FrameName)
                 .ToList();
 
@@ -175,25 +157,18 @@ namespace Services.GlassesService
             if (frame == null)
                 return null;
 
-            if (IsAvailableStatus(frame.Status))
-                return frame;
+            // Return any frame that is not inactive
+            if (IsInactiveStatus(frame.Status))
+                return null;
 
-            // Allow out-of-stock frames that are in an active preorder campaign
-            if (string.Equals(frame.Status, "out_of_stock", StringComparison.OrdinalIgnoreCase))
-            {
-                var activeCampaignFrameIds = await GetActiveCampaignFrameIdsAsync();
-                if (activeCampaignFrameIds.Contains(frame.FrameId))
-                    return frame;
-            }
-
-            return null;
+            return frame;
         }
 
         public async Task<List<FrameMedium>> GetFrameMediaAsync(Guid frameId)
         {
             var frame = await _frameRepository.GetByIdAsync(frameId);
 
-            if (frame == null || !IsAvailableStatus(frame.Status))
+            if (frame == null || IsInactiveStatus(frame.Status))
             {
                 return new List<FrameMedium>();
             }
@@ -207,20 +182,9 @@ namespace Services.GlassesService
             return AvailableStatus.Equals(status, StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>
-        /// Returns the set of FrameIds that belong to currently active preorder campaigns.
-        /// </summary>
-        private async Task<HashSet<Guid>> GetActiveCampaignFrameIdsAsync()
+        private static bool IsInactiveStatus(string? status)
         {
-            var now = DateTime.UtcNow;
-            var allCampaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
-            return allCampaigns
-                .Where(c => c.StartDate <= now && c.EndDate >= now &&
-                            (c.Status == "upcoming" || c.Status == "active"))
-                .SelectMany(c => c.CampaignFrames)
-                .Where(cf => cf.FrameId.HasValue)
-                .Select(cf => cf.FrameId!.Value)
-                .ToHashSet();
+            return InactiveStatus.Equals(status, StringComparison.OrdinalIgnoreCase);
         }
 
         #endregion
