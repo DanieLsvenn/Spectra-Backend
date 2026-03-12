@@ -41,6 +41,26 @@ public partial class Frame
     /// </summary>
     public int? ReorderLevel { get; set; }
 
+    /// <summary>
+    /// Minimum supported sphere (Rx) value for this frame
+    /// </summary>
+    public double? MinRx { get; set; }
+
+    /// <summary>
+    /// Maximum supported sphere (Rx) value for this frame
+    /// </summary>
+    public double? MaxRx { get; set; }
+
+    /// <summary>
+    /// Minimum supported pupillary distance for this frame
+    /// </summary>
+    public int? MinPd { get; set; }
+
+    /// <summary>
+    /// Maximum supported pupillary distance for this frame
+    /// </summary>
+    public int? MaxPd { get; set; }
+
     public virtual Brand Brand { get; set; }
 
     public virtual Material Material { get; set; }
@@ -52,6 +72,8 @@ public partial class Frame
     public virtual ICollection<FrameColor> FrameColors { get; set; } = new List<FrameColor>();
 
     public virtual ICollection<FrameMedium> FrameMedia { get; set; } = new List<FrameMedium>();
+
+    public virtual ICollection<FrameLensType> FrameLensTypes { get; set; } = new List<FrameLensType>();
 
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 

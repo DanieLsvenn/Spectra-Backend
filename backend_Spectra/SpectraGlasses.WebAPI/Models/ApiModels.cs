@@ -48,7 +48,30 @@
         public double? BasePrice { get; set; }
         public int? StockQuantity { get; set; }
         public int? ReorderLevel { get; set; }
-        public List<Guid>? ColorIds { get; set; }
+        /// <summary>
+        /// Colors with per-variant stock quantities
+        /// </summary>
+        public List<FrameColorVariantRequest>? ColorVariants { get; set; }
+        /// <summary>
+        /// Supported lens type IDs for this frame
+        /// </summary>
+        public List<Guid>? SupportedLensTypeIds { get; set; }
+        /// <summary>
+        /// Minimum supported sphere (Rx) value
+        /// </summary>
+        public double? MinRx { get; set; }
+        /// <summary>
+        /// Maximum supported sphere (Rx) value
+        /// </summary>
+        public double? MaxRx { get; set; }
+        /// <summary>
+        /// Minimum supported pupillary distance
+        /// </summary>
+        public int? MinPd { get; set; }
+        /// <summary>
+        /// Maximum supported pupillary distance
+        /// </summary>
+        public int? MaxPd { get; set; }
     }
 
     public class UpdateFrameRequest
@@ -66,7 +89,27 @@
         public string? Status { get; set; }
         public int? StockQuantity { get; set; }
         public int? ReorderLevel { get; set; }
-        public List<Guid>? ColorIds { get; set; }
+        /// <summary>
+        /// Colors with per-variant stock quantities. If provided, replaces all existing color variants.
+        /// </summary>
+        public List<FrameColorVariantRequest>? ColorVariants { get; set; }
+        /// <summary>
+        /// Supported lens type IDs. If provided, replaces all existing supported lens types.
+        /// </summary>
+        public List<Guid>? SupportedLensTypeIds { get; set; }
+        public double? MinRx { get; set; }
+        public double? MaxRx { get; set; }
+        public int? MinPd { get; set; }
+        public int? MaxPd { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a color variant with its stock quantity
+    /// </summary>
+    public class FrameColorVariantRequest
+    {
+        public Guid ColorId { get; set; }
+        public int StockQuantity { get; set; }
     }
 
     public class FrameValidationResult

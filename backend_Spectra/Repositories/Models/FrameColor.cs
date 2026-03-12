@@ -14,6 +14,11 @@ public partial class FrameColor
 
     public bool? IsDefault { get; set; }
 
+    /// <summary>
+    /// Stock quantity for this specific frame-color variant
+    /// </summary>
+    public int? StockQuantity { get; set; }
+
     public virtual Frame Frame { get; set; }
 
     public virtual Color Color { get; set; }

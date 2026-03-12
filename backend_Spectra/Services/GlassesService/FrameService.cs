@@ -32,19 +32,35 @@ namespace Services.GlassesService
 
         // Inventory management
         Task<bool> CheckStockAvailabilityAsync(Guid frameId, int quantity);
+        Task<bool> CheckVariantStockAsync(Guid frameId, Guid colorId, int quantity);
         Task<bool> DeductStockAsync(Guid frameId, int quantity);
+        Task<bool> DeductVariantStockAsync(Guid frameId, Guid colorId, int quantity);
         Task<bool> RestoreStockAsync(Guid frameId, int quantity);
+        Task<bool> RestoreVariantStockAsync(Guid frameId, Guid colorId, int quantity);
         Task<List<Frame>> GetLowStockFramesAsync();
         Task<List<Frame>> GetOutOfStockFramesAsync();
 
         // Frame colors
-        Task SetFrameColorsAsync(Guid frameId, List<Guid> colorIds);
+        Task SetFrameColorsAsync(Guid frameId, List<FrameColorInput> colorInputs);
 
         // Frame sizes
         Task SetFrameSizesAsync(Guid frameId, List<string> sizes);
 
+        // Frame lens types
+        Task SetFrameLensTypesAsync(Guid frameId, List<Guid> lensTypeIds);
+        Task<List<LensType>> GetSupportedLensTypesAsync(Guid frameId);
+
         // Validation
         FrameValidationResult ValidateFrameSizeAttributes(int? lensWidth, int? bridgeWidth, int? frameWidth, int? templeLength, string? size = null);
+    }
+
+    /// <summary>
+    /// Input model for setting frame colors with per-variant stock
+    /// </summary>
+    public class FrameColorInput
+    {
+        public Guid ColorId { get; set; }
+        public int StockQuantity { get; set; }
     }
 
     public class FrameService : IFrameService
@@ -53,6 +69,7 @@ namespace Services.GlassesService
         private readonly GenericRepository<FrameMedium> _frameMediaRepository;
         private readonly GenericRepository<FrameColor> _frameColorRepository;
         private readonly GenericRepository<FrameSize> _frameSizeRepository;
+        private readonly GenericRepository<FrameLensType> _frameLensTypeRepository;
         private readonly GenericRepository<CampaignFrame> _campaignFrameRepository;
         private readonly GenericRepository<PreorderCampaign> _campaignRepository;
 
@@ -76,6 +93,7 @@ namespace Services.GlassesService
             GenericRepository<FrameMedium> frameMediaRepository,
             GenericRepository<FrameColor> frameColorRepository,
             GenericRepository<FrameSize> frameSizeRepository,
+            GenericRepository<FrameLensType> frameLensTypeRepository,
             GenericRepository<CampaignFrame> campaignFrameRepository,
             GenericRepository<PreorderCampaign> campaignRepository)
         {
@@ -83,6 +101,7 @@ namespace Services.GlassesService
             _frameMediaRepository = frameMediaRepository;
             _frameColorRepository = frameColorRepository;
             _frameSizeRepository = frameSizeRepository;
+            _frameLensTypeRepository = frameLensTypeRepository;
             _campaignFrameRepository = campaignFrameRepository;
             _campaignRepository = campaignRepository;
         }
@@ -91,7 +110,7 @@ namespace Services.GlassesService
 
         /// <summary>
         /// Builds an IQueryable for Frame with all navigation properties eagerly loaded,
-        /// including nested Color inside FrameColors.
+        /// including nested Color inside FrameColors and supported LensTypes.
         /// Uses AsNoTracking to prevent EF navigation fixup from wiring inverse collections
         /// (e.g. Brand.Frames, Shape.Frames) which causes deep object graphs that fail serialization.
         /// </summary>
@@ -104,7 +123,9 @@ namespace Services.GlassesService
                 .Include(f => f.Material)
                 .Include(f => f.Shape)
                 .Include(f => f.FrameColors)
-                    .ThenInclude(fc => fc.Color);
+                    .ThenInclude(fc => fc.Color)
+                .Include(f => f.FrameLensTypes)
+                    .ThenInclude(flt => flt.LensType);
         }
 
         public async Task<PaginationResult<Frame>> GetAvailableFramesAsync(int currentPage = 1, int pageSize = 10)
@@ -294,6 +315,18 @@ namespace Services.GlassesService
             if (updatedFrame.ReorderLevel.HasValue)
                 existingFrame.ReorderLevel = updatedFrame.ReorderLevel;
 
+            if (updatedFrame.MinRx.HasValue)
+                existingFrame.MinRx = updatedFrame.MinRx;
+
+            if (updatedFrame.MaxRx.HasValue)
+                existingFrame.MaxRx = updatedFrame.MaxRx;
+
+            if (updatedFrame.MinPd.HasValue)
+                existingFrame.MinPd = updatedFrame.MinPd;
+
+            if (updatedFrame.MaxPd.HasValue)
+                existingFrame.MaxPd = updatedFrame.MaxPd;
+
             return await _frameRepository.UpdateAsync(existingFrame);
         }
 
@@ -328,6 +361,18 @@ namespace Services.GlassesService
             return (frame.StockQuantity ?? 0) >= quantity;
         }
 
+        public async Task<bool> CheckVariantStockAsync(Guid frameId, Guid colorId, int quantity)
+        {
+            var variants = await _frameColorRepository.SearchAsync(
+                fc => fc.FrameId == frameId && fc.ColorId == colorId);
+            var variant = variants.FirstOrDefault();
+
+            if (variant == null)
+                return false;
+
+            return (variant.StockQuantity ?? 0) >= quantity;
+        }
+
         public async Task<bool> DeductStockAsync(Guid frameId, int quantity)
         {
             var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
@@ -351,6 +396,28 @@ namespace Services.GlassesService
             return true;
         }
 
+        public async Task<bool> DeductVariantStockAsync(Guid frameId, Guid colorId, int quantity)
+        {
+            var variants = await _frameColorRepository.SearchAsync(
+                fc => fc.FrameId == frameId && fc.ColorId == colorId);
+            var variant = variants.FirstOrDefault();
+
+            if (variant == null)
+                return false;
+
+            var currentStock = variant.StockQuantity ?? 0;
+            if (currentStock < quantity)
+                return false;
+
+            variant.StockQuantity = currentStock - quantity;
+            await _frameColorRepository.UpdateAsync(variant);
+
+            // Recalculate frame-level stock as sum of all variant stocks
+            await RecalculateFrameStockAsync(frameId);
+
+            return true;
+        }
+
         public async Task<bool> RestoreStockAsync(Guid frameId, int quantity)
         {
             var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
@@ -369,6 +436,52 @@ namespace Services.GlassesService
 
             await _frameRepository.UpdateAsync(frame);
             return true;
+        }
+
+        public async Task<bool> RestoreVariantStockAsync(Guid frameId, Guid colorId, int quantity)
+        {
+            var variants = await _frameColorRepository.SearchAsync(
+                fc => fc.FrameId == frameId && fc.ColorId == colorId);
+            var variant = variants.FirstOrDefault();
+
+            if (variant == null)
+                return false;
+
+            var currentStock = variant.StockQuantity ?? 0;
+            variant.StockQuantity = currentStock + quantity;
+            await _frameColorRepository.UpdateAsync(variant);
+
+            // Recalculate frame-level stock as sum of all variant stocks
+            await RecalculateFrameStockAsync(frameId);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Recalculates the frame-level StockQuantity as the sum of all variant stocks.
+        /// Also updates the frame status based on total stock.
+        /// </summary>
+        private async Task RecalculateFrameStockAsync(Guid frameId)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            if (frame == null) return;
+
+            var allVariants = await _frameColorRepository.SearchAsync(fc => fc.FrameId == frameId);
+            var totalStock = allVariants.Sum(v => v.StockQuantity ?? 0);
+
+            frame.StockQuantity = totalStock;
+
+            if (totalStock <= 0)
+            {
+                frame.Status = "out_of_stock";
+            }
+            else if (frame.Status?.ToLower() == "out_of_stock")
+            {
+                frame.Status = AvailableStatus;
+            }
+
+            await _frameRepository.UpdateAsync(frame);
         }
 
         public async Task<List<Frame>> GetLowStockFramesAsync()
@@ -394,7 +507,7 @@ namespace Services.GlassesService
 
         #region Frame Colors
 
-        public async Task SetFrameColorsAsync(Guid frameId, List<Guid> colorIds)
+        public async Task SetFrameColorsAsync(Guid frameId, List<FrameColorInput> colorInputs)
         {
             // Remove existing frame colors
             var existing = await _frameColorRepository.SearchAsync(fc => fc.FrameId == frameId);
@@ -403,17 +516,37 @@ namespace Services.GlassesService
                 await _frameColorRepository.DeleteAsync(fc);
             }
 
-            // Add new frame colors
-            for (int i = 0; i < colorIds.Count; i++)
+            // Add new frame colors with per-variant stock
+            int totalStock = 0;
+            for (int i = 0; i < colorInputs.Count; i++)
             {
                 var frameColor = new FrameColor
                 {
                     FrameColorId = Guid.NewGuid(),
                     FrameId = frameId,
-                    ColorId = colorIds[i],
-                    IsDefault = i == 0
+                    ColorId = colorInputs[i].ColorId,
+                    IsDefault = i == 0,
+                    StockQuantity = colorInputs[i].StockQuantity
                 };
                 await _frameColorRepository.CreateAsync(frameColor);
+                totalStock += colorInputs[i].StockQuantity;
+            }
+
+            // Update frame-level stock to match sum of variants
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame = frames.FirstOrDefault();
+            if (frame != null)
+            {
+                frame.StockQuantity = totalStock;
+                if (totalStock <= 0)
+                {
+                    frame.Status = "out_of_stock";
+                }
+                else if (frame.Status?.ToLower() == "out_of_stock")
+                {
+                    frame.Status = AvailableStatus;
+                }
+                await _frameRepository.UpdateAsync(frame);
             }
         }
 
@@ -442,6 +575,43 @@ namespace Services.GlassesService
                 };
                 await _frameSizeRepository.CreateAsync(frameSize);
             }
+        }
+
+        #endregion
+
+        #region Frame Lens Types
+
+        public async Task SetFrameLensTypesAsync(Guid frameId, List<Guid> lensTypeIds)
+        {
+            // Remove existing frame lens types
+            var existing = await _frameLensTypeRepository.SearchAsync(flt => flt.FrameId == frameId);
+            foreach (var flt in existing)
+            {
+                await _frameLensTypeRepository.DeleteAsync(flt);
+            }
+
+            // Add new frame lens types
+            foreach (var lensTypeId in lensTypeIds)
+            {
+                var frameLensType = new FrameLensType
+                {
+                    FrameLensTypeId = Guid.NewGuid(),
+                    FrameId = frameId,
+                    LensTypeId = lensTypeId
+                };
+                await _frameLensTypeRepository.CreateAsync(frameLensType);
+            }
+        }
+
+        public async Task<List<LensType>> GetSupportedLensTypesAsync(Guid frameId)
+        {
+            var frameLensTypes = await _frameLensTypeRepository.SearchAsyncInclude(
+                flt => flt.FrameId == frameId,
+                flt => flt.LensType);
+            return frameLensTypes
+                .Where(flt => flt.LensType != null)
+                .Select(flt => flt.LensType)
+                .ToList();
         }
 
         #endregion
@@ -493,25 +663,7 @@ namespace Services.GlassesService
                 }
             }
 
-            // Task 5: Strict FrameWidth formula
-            if (lensWidth.HasValue && bridgeWidth.HasValue && frameWidth.HasValue)
-            {
-                var expected = 2 * lensWidth.Value + bridgeWidth.Value;
-                if (frameWidth.Value != expected)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Frame width must equal (2 × Lens Width) + Bridge Width. Expected {expected}mm but got {frameWidth.Value}mm.");
-                }
-            }
-
-            // Task 5: BridgeWidth < LensWidth
-            if (bridgeWidth.HasValue && lensWidth.HasValue && bridgeWidth >= lensWidth)
-            {
-                result.IsValid = false;
-                result.Errors.Add("Bridge width must be less than lens width");
-            }
-
-            // Task 5: Size validation
+            // Size validation
             if (!string.IsNullOrEmpty(size))
             {
                 if (!ValidSizes.Contains(size.ToLower()))

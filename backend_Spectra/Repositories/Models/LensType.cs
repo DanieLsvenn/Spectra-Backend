@@ -36,4 +36,6 @@ public partial class LensType
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 
     public virtual ICollection<PreorderItem> PreorderItems { get; set; } = new List<PreorderItem>();
+
+    public virtual ICollection<FrameLensType> FrameLensTypes { get; set; } = new List<FrameLensType>();
 }

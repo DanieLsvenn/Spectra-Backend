@@ -64,6 +64,8 @@ public partial class Context : DbContext
 
     public virtual DbSet<PreorderStatusLog> PreorderStatusLogs { get; set; }
 
+    public virtual DbSet<FrameLensType> FrameLensTypes { get; set; }
+    
     private string GetConnectionString()
     {
         IConfiguration configuration = new ConfigurationBuilder()
@@ -184,6 +186,9 @@ public partial class Context : DbContext
             entity.Property(e => e.IsDefault)
                 .HasDefaultValue(false)
                 .HasColumnName("isDefault");
+            entity.Property(e => e.StockQuantity)
+                .HasColumnName("stockQuantity")
+                .IsRequired(false);
 
             entity.HasOne(d => d.Frame).WithMany(p => p.FrameColors)
                 .HasForeignKey(d => d.FrameId)
@@ -342,6 +347,20 @@ public partial class Context : DbContext
                 .IsRequired(false);
             entity.Property(e => e.ReorderLevel)
                 .HasColumnName("reorderLevel")
+                .IsRequired(false);
+
+            // Prescription limit columns
+            entity.Property(e => e.MinRx)
+                .HasColumnName("minRx")
+                .IsRequired(false);
+            entity.Property(e => e.MaxRx)
+                .HasColumnName("maxRx")
+                .IsRequired(false);
+            entity.Property(e => e.MinPd)
+                .HasColumnName("minPd")
+                .IsRequired(false);
+            entity.Property(e => e.MaxPd)
+                .HasColumnName("maxPd")
                 .IsRequired(false);
 
             entity.HasOne(d => d.Brand).WithMany(p => p.Frames)
@@ -867,6 +886,27 @@ public partial class Context : DbContext
             entity.HasOne(d => d.Frame).WithMany(p => p.CampaignFrames)
                 .HasForeignKey(d => d.FrameId)
                 .HasConstraintName("FK_CAMPAIGN_FRAME_FRAME");
+        });
+
+        modelBuilder.Entity<FrameLensType>(entity =>
+        {
+            entity.HasKey(e => e.FrameLensTypeId);
+
+            entity.ToTable("FRAME_LENS_TYPE");
+
+            entity.Property(e => e.FrameLensTypeId)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("frameLensTypeId");
+            entity.Property(e => e.FrameId).HasColumnName("frameId");
+            entity.Property(e => e.LensTypeId).HasColumnName("lensTypeId");
+
+            entity.HasOne(d => d.Frame).WithMany(p => p.FrameLensTypes)
+                .HasForeignKey(d => d.FrameId)
+                .HasConstraintName("FK_FRAME_LENS_TYPE_FRAME");
+
+            entity.HasOne(d => d.LensType).WithMany(p => p.FrameLensTypes)
+                .HasForeignKey(d => d.LensTypeId)
+                .HasConstraintName("FK_FRAME_LENS_TYPE_LENS_TYPE");
         });
 
         modelBuilder.Entity<PreorderStatusLog>(entity =>

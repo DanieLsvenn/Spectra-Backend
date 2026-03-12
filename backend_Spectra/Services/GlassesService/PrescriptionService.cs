@@ -48,15 +48,15 @@ namespace Services.GlassesService
 
         // Validation constants
         private const double MinSphere = -20.0;
-        private const double MaxSphere = 20.0;
+        private const double MaxSphere = 12.0;
         private const double MinCylinder = -6.0;
-        private const double MaxCylinder = 0.0;
-        private const int MinAxis = 1;
+        private const double MaxCylinder = 6.0;
+        private const int MinAxis = 0;
         private const int MaxAxis = 180;
         private const double MinAdd = 0.75;
         private const double MaxAdd = 3.50;
-        private const int MinPD = 50;
-        private const int MaxPD = 80;
+        private const int MinPD = 57;
+        private const int MaxPD = 79;
         private const int DefaultExpirationMonths = 24; // Prescriptions typically valid for 2 years
 
         public PrescriptionService(
@@ -95,7 +95,7 @@ namespace Services.GlassesService
                 if (prescription.SphereLeft < MinSphere || prescription.SphereLeft > MaxSphere)
                 {
                     result.IsValid = false;
-                    result.Errors.Add($"Left sphere must be between {MinSphere} and {MaxSphere}");
+                    result.Errors.Add($"Left sphere (SPH) must be between {MinSphere} and +{MaxSphere}");
                 }
             }
 
@@ -104,57 +104,34 @@ namespace Services.GlassesService
                 if (prescription.SphereRight < MinSphere || prescription.SphereRight > MaxSphere)
                 {
                     result.IsValid = false;
-                    result.Errors.Add($"Right sphere must be between {MinSphere} and {MaxSphere}");
+                    result.Errors.Add($"Right sphere (SPH) must be between {MinSphere} and +{MaxSphere}");
                 }
             }
 
             // Validate Cylinder values
             if (prescription.CylinderLeft.HasValue)
             {
-                if (prescription.CylinderLeft < MinCylinder || prescription.CylinderLeft > 0)
+                if (prescription.CylinderLeft < MinCylinder || prescription.CylinderLeft > MaxCylinder)
                 {
                     result.IsValid = false;
-                    result.Errors.Add($"Left cylinder must be between {MinCylinder} and 0");
+                    result.Errors.Add($"Left cylinder (CYL) must be between {MinCylinder} and +{MaxCylinder}");
                 }
             }
 
             if (prescription.CylinderRight.HasValue)
             {
-                if (prescription.CylinderRight < MinCylinder || prescription.CylinderRight > 0)
+                if (prescription.CylinderRight < MinCylinder || prescription.CylinderRight > MaxCylinder)
                 {
                     result.IsValid = false;
-                    result.Errors.Add($"Right cylinder must be between {MinCylinder} and 0");
+                    result.Errors.Add($"Right cylinder (CYL) must be between {MinCylinder} and +{MaxCylinder}");
                 }
             }
 
-            // Validate Axis values (required if cylinder is present)
-            if (prescription.CylinderLeft.HasValue && prescription.CylinderLeft != 0)
-            {
-                if (!prescription.AxisLeft.HasValue)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add("Left axis is required when cylinder is specified");
-                }
-                else if (prescription.AxisLeft < MinAxis || prescription.AxisLeft > MaxAxis)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Left axis must be between {MinAxis} and {MaxAxis}");
-                }
-            }
-
-            if (prescription.CylinderRight.HasValue && prescription.CylinderRight != 0)
-            {
-                if (!prescription.AxisRight.HasValue)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add("Right axis is required when cylinder is specified");
-                }
-                else if (prescription.AxisRight < MinAxis || prescription.AxisRight > MaxAxis)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Right axis must be between {MinAxis} and {MaxAxis}");
-                }
-            }
+            // Validate Axis values with CYL dependency rule:
+            //   IF CYL == 0 ? Axis must be 0
+            //   IF CYL != 0 ? Axis must be between 1 and 180
+            ValidateAxisForEye(result, "Left", prescription.CylinderLeft, prescription.AxisLeft);
+            ValidateAxisForEye(result, "Right", prescription.CylinderRight, prescription.AxisRight);
 
             // Validate Add values (for progressive/bifocal lenses)
             if (prescription.AddLeft.HasValue)
@@ -181,7 +158,7 @@ namespace Services.GlassesService
                 if (prescription.PupillaryDistance < MinPD || prescription.PupillaryDistance > MaxPD)
                 {
                     result.IsValid = false;
-                    result.Errors.Add($"Pupillary distance must be between {MinPD}mm and {MaxPD}mm");
+                    result.Errors.Add($"Pupillary distance (PD) must be between {MinPD}mm and {MaxPD}mm");
                 }
             }
 
@@ -193,6 +170,51 @@ namespace Services.GlassesService
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Validates axis value for a single eye based on the CYL dependency rule:
+        ///   CYL == 0  ? Axis must be 0
+        ///   CYL != 0  ? Axis is required and must be between 1 and 180
+        /// </summary>
+        private static void ValidateAxisForEye(
+            PrescriptionValidationResult result,
+            string eye,
+            double? cylinder,
+            int? axis)
+        {
+            if (cylinder.HasValue && cylinder == 0)
+            {
+                // CYL is 0 ? Axis must be 0 (or absent, treated as 0)
+                if (axis.HasValue && axis != 0)
+                {
+                    result.IsValid = false;
+                    result.Errors.Add($"{eye} axis must be 0 when cylinder is 0");
+                }
+            }
+            else if (cylinder.HasValue && cylinder != 0)
+            {
+                // CYL is non-zero ? Axis is required and must be 1-180
+                if (!axis.HasValue)
+                {
+                    result.IsValid = false;
+                    result.Errors.Add($"{eye} axis is required when cylinder is specified and non-zero");
+                }
+                else if (axis < 1 || axis > 180)
+                {
+                    result.IsValid = false;
+                    result.Errors.Add($"{eye} axis must be between 1 and 180 when cylinder is non-zero");
+                }
+            }
+            else
+            {
+                // No CYL provided — if axis is provided, validate general range
+                if (axis.HasValue && (axis < MinAxis || axis > MaxAxis))
+                {
+                    result.IsValid = false;
+                    result.Errors.Add($"{eye} axis must be between {MinAxis} and {MaxAxis}");
+                }
+            }
         }
 
         #endregion

@@ -92,6 +92,40 @@ namespace SpectraGlasses.WebAPI.Controllers
             return Ok(media);
         }
 
+        /// <summary>
+        /// Gets the supported lens types for a specific frame.
+        /// Single Vision and Non-Prescription lens types are always available.
+        /// </summary>
+        /// <param name="id">The frame ID</param>
+        /// <returns>List of supported lens types for the frame</returns>
+        [HttpGet("{id:guid}/lens-types")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetFrameSupportedLensTypes(Guid id)
+        {
+            var frame = await _frameService.GetFrameByIdAsync(id);
+            if (frame == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    ErrorCode = "FRAME_NOT_FOUND",
+                    Message = "Frame not found or is not available"
+                });
+            }
+
+            var supportedLensTypes = await _frameService.GetSupportedLensTypesAsync(id);
+            return Ok(new
+            {
+                FrameId = id,
+                FrameName = frame.FrameName,
+                MinRx = frame.MinRx,
+                MaxRx = frame.MaxRx,
+                MinPd = frame.MinPd,
+                MaxPd = frame.MaxPd,
+                SupportedLensTypes = supportedLensTypes
+            });
+        }
+
         #endregion
 
         #region Manager Endpoints (Authorization Required)
@@ -136,6 +170,13 @@ namespace SpectraGlasses.WebAPI.Controllers
                 });
             }
 
+            // Calculate initial stock from color variants if provided
+            int initialStock = request.StockQuantity ?? 0;
+            if (request.ColorVariants != null && request.ColorVariants.Count > 0)
+            {
+                initialStock = request.ColorVariants.Sum(cv => cv.StockQuantity);
+            }
+
             var frame = new Frame
             {
                 FrameName = request.FrameName,
@@ -148,16 +189,31 @@ namespace SpectraGlasses.WebAPI.Controllers
                 TempleLength = request.TempleLength,
                 Size = request.Size,
                 BasePrice = request.BasePrice,
-                StockQuantity = request.StockQuantity ?? 0,
-                ReorderLevel = request.ReorderLevel ?? 5
+                StockQuantity = initialStock,
+                ReorderLevel = request.ReorderLevel ?? 5,
+                MinRx = request.MinRx,
+                MaxRx = request.MaxRx,
+                MinPd = request.MinPd,
+                MaxPd = request.MaxPd
             };
 
             var createdFrame = await _frameService.CreateFrameAsync(frame);
 
-            // Set frame colors if provided
-            if (request.ColorIds != null && request.ColorIds.Count > 0)
+            // Set frame color variants with per-color stock
+            if (request.ColorVariants != null && request.ColorVariants.Count > 0)
             {
-                await _frameService.SetFrameColorsAsync(createdFrame.FrameId, request.ColorIds);
+                var colorInputs = request.ColorVariants.Select(cv => new FrameColorInput
+                {
+                    ColorId = cv.ColorId,
+                    StockQuantity = cv.StockQuantity
+                }).ToList();
+                await _frameService.SetFrameColorsAsync(createdFrame.FrameId, colorInputs);
+            }
+
+            // Set supported lens types if provided
+            if (request.SupportedLensTypeIds != null && request.SupportedLensTypeIds.Count > 0)
+            {
+                await _frameService.SetFrameLensTypesAsync(createdFrame.FrameId, request.SupportedLensTypeIds);
             }
 
             // Re-fetch with full includes
@@ -230,7 +286,11 @@ namespace SpectraGlasses.WebAPI.Controllers
                 BasePrice = request.BasePrice,
                 Status = request.Status,
                 StockQuantity = request.StockQuantity,
-                ReorderLevel = request.ReorderLevel
+                ReorderLevel = request.ReorderLevel,
+                MinRx = request.MinRx,
+                MaxRx = request.MaxRx,
+                MinPd = request.MinPd,
+                MaxPd = request.MaxPd
             };
 
             var result = await _frameService.UpdateFrameAsync(id, updatedFrame);
@@ -244,10 +304,21 @@ namespace SpectraGlasses.WebAPI.Controllers
                 });
             }
 
-            // Update frame colors if provided
-            if (request.ColorIds != null)
+            // Update frame color variants if provided
+            if (request.ColorVariants != null)
             {
-                await _frameService.SetFrameColorsAsync(id, request.ColorIds);
+                var colorInputs = request.ColorVariants.Select(cv => new FrameColorInput
+                {
+                    ColorId = cv.ColorId,
+                    StockQuantity = cv.StockQuantity
+                }).ToList();
+                await _frameService.SetFrameColorsAsync(id, colorInputs);
+            }
+
+            // Update supported lens types if provided
+            if (request.SupportedLensTypeIds != null)
+            {
+                await _frameService.SetFrameLensTypesAsync(id, request.SupportedLensTypeIds);
             }
 
             // Re-fetch with full includes

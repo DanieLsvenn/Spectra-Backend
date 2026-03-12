@@ -98,6 +98,7 @@ builder.Services.AddScoped<GenericRepository<ProductReview>>();
 builder.Services.AddScoped<GenericRepository<PreorderCampaign>>();
 builder.Services.AddScoped<GenericRepository<CampaignFrame>>();
 builder.Services.AddScoped<GenericRepository<PreorderStatusLog>>();
+builder.Services.AddScoped<GenericRepository<FrameLensType>>();
 
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
