@@ -70,6 +70,7 @@ namespace Services.GlassesService
         private readonly GenericRepository<FrameColor> _frameColorRepository;
         private readonly GenericRepository<FrameSize> _frameSizeRepository;
         private readonly GenericRepository<FrameLensType> _frameLensTypeRepository;
+        private readonly IPreorderCampaignService _campaignService;
 
         private const string AvailableStatus = "available";
         private const string InactiveStatus = "inactive";
@@ -91,13 +92,15 @@ namespace Services.GlassesService
             GenericRepository<FrameMedium> frameMediaRepository,
             GenericRepository<FrameColor> frameColorRepository,
             GenericRepository<FrameSize> frameSizeRepository,
-            GenericRepository<FrameLensType> frameLensTypeRepository)
+            GenericRepository<FrameLensType> frameLensTypeRepository,
+            IPreorderCampaignService campaignService)
         {
             _frameRepository = frameRepository;
             _frameMediaRepository = frameMediaRepository;
             _frameColorRepository = frameColorRepository;
             _frameSizeRepository = frameSizeRepository;
             _frameLensTypeRepository = frameLensTypeRepository;
+            _campaignService = campaignService;
         }
 
         #region Public Read Operations
@@ -126,9 +129,23 @@ namespace Services.GlassesService
         {
             var allFrames = await GetFrameQueryWithIncludes().ToListAsync();
 
-            // Show all frames that are not inactive (available + out_of_stock)
+            // FrameIds in upcoming (not-yet-started) campaigns — hide these if out of stock
+            var upcomingCampaignFrameIds = await _campaignService.GetUpcomingCampaignFrameIdsAsync();
+
+            // Show all non-inactive frames, but hide out-of-stock frames
+            // that are in an upcoming campaign (to avoid spoiling the preorder launch)
             var availableFrames = allFrames
-                .Where(f => !IsInactiveStatus(f.Status))
+                .Where(f =>
+                {
+                    if (IsInactiveStatus(f.Status))
+                        return false;
+
+                    if (string.Equals(f.Status, "out_of_stock", StringComparison.OrdinalIgnoreCase)
+                        && upcomingCampaignFrameIds.Contains(f.FrameId))
+                        return false;
+
+                    return true;
+                })
                 .OrderBy(f => f.FrameName)
                 .ToList();
 

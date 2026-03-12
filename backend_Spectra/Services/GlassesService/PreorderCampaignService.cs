@@ -10,12 +10,17 @@ namespace Services.GlassesService
     public interface IPreorderCampaignService
     {
         Task<PreorderCampaign> CreateCampaignAsync(PreorderCampaign campaign, List<CampaignFrame> frames);
+        Task<List<PreorderCampaign>> GetAllCampaignsAsync();
         Task<List<PreorderCampaign>> GetActiveCampaignsAsync();
         Task<PreorderCampaign?> GetCampaignByIdAsync(Guid campaignId);
         Task<PreorderCampaign?> UpdateCampaignAsync(Guid campaignId, PreorderCampaign updates);
         Task<bool> EndCampaignAsync(Guid campaignId);
         Task<bool> ValidatePreorderAgainstCampaignAsync(Guid campaignId, List<PreorderItem> items);
         Task<bool> IncrementCampaignSlotsAsync(Guid campaignId);
+        /// <summary>
+        /// Returns the set of FrameIds that belong to upcoming (not yet started) campaigns.
+        /// </summary>
+        Task<HashSet<Guid>> GetUpcomingCampaignFrameIdsAsync();
     }
 
     public class PreorderCampaignService : IPreorderCampaignService
@@ -64,6 +69,12 @@ namespace Services.GlassesService
             }
 
             return await GetCampaignByIdAsync(created.CampaignId) ?? created;
+        }
+
+        public async Task<List<PreorderCampaign>> GetAllCampaignsAsync()
+        {
+            var campaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
+            return campaigns.OrderByDescending(c => c.CreatedAt).ToList();
         }
 
         public async Task<List<PreorderCampaign>> GetActiveCampaignsAsync()
@@ -154,6 +165,19 @@ namespace Services.GlassesService
 
             await _campaignRepository.UpdateAsync(campaign);
             return true;
+        }
+
+        public async Task<HashSet<Guid>> GetUpcomingCampaignFrameIdsAsync()
+        {
+            var now = DateTime.UtcNow;
+            var campaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
+            return campaigns
+                .Where(c => string.Equals(c.Status, "upcoming", StringComparison.OrdinalIgnoreCase)
+                             && c.StartDate > now)
+                .SelectMany(c => c.CampaignFrames)
+                .Where(cf => cf.FrameId.HasValue)
+                .Select(cf => cf.FrameId!.Value)
+                .ToHashSet();
         }
     }
 }

@@ -20,6 +20,18 @@ namespace SpectraGlasses.WebAPI.Controllers
         #region Public Endpoints
 
         /// <summary>
+        /// Gets all preorder campaigns (upcoming, active, ended)
+        /// </summary>
+        [HttpGet]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetAllCampaigns()
+        {
+            var campaigns = await _campaignService.GetAllCampaignsAsync();
+            var result = campaigns.Select(MapCampaignResponse).ToList();
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Gets all active preorder campaigns
         /// </summary>
         [HttpGet("active")]
@@ -29,6 +41,22 @@ namespace SpectraGlasses.WebAPI.Controllers
             var campaigns = await _campaignService.GetActiveCampaignsAsync();
             var result = campaigns.Select(MapCampaignResponse).ToList();
             return Ok(result);
+        }
+
+        /// <summary>
+        /// Gets the list of possible campaign statuses
+        /// </summary>
+        [HttpGet("statuses")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public IActionResult GetCampaignStatuses()
+        {
+            var statuses = new[]
+            {
+                new { Value = "upcoming", Description = "Campaign has not started yet" },
+                new { Value = "active", Description = "Campaign is currently running" },
+                new { Value = "ended", Description = "Campaign has ended" }
+            };
+            return Ok(statuses);
         }
 
         /// <summary>
