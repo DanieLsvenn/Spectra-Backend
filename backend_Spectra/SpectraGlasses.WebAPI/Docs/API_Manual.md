@@ -393,8 +393,9 @@ Query parameters: `page`, `pageSize`
 
 Visibility rules:
 - Frames with status `available` are always shown
-- Frames with status `out_of_stock` are **only** shown if they belong to an active preorder campaign
+- Frames with status `out_of_stock` are shown **unless** they belong to an **upcoming** campaign (status `upcoming` and start date in the future) — these are hidden to avoid spoiling the preorder launch
 - Frames with status `inactive` are never shown
+- **Note:** Admin inventory endpoints (`GET /api/Frames/inventory/out-of-stock`, `GET /api/Frames/inventory/low-stock`) are **not** affected by these rules and always return all matching frames regardless of campaign status
 
 Response 200: Paginated list of frames. Each frame includes `brand`, `material`, `shape`, `frameColors`, and `frameMedia`.
 
@@ -409,8 +410,7 @@ Roles allowed: Public (no authentication required)
 Path parameter `id`: GUID of the frame.
 
 Visibility rules:
-- Available frames are always returned
-- Out-of-stock frames are returned only if they belong to an active preorder campaign
+- Any non-inactive frame is returned (both `available` and `out_of_stock`)
 - Inactive frames are never returned (404)
 
 Response 200: Frame object with details.
@@ -426,6 +426,10 @@ Gets all media (images/videos) for a specific frame.
 Roles allowed: Public (no authentication required)
 
 Path parameter `id`: GUID of the frame.
+
+Visibility rules:
+- Media is returned for any non-inactive frame (both `available` and `out_of_stock`)
+- Returns empty list / 404 for inactive frames
 
 Response 200: List of media items.
 
@@ -2121,9 +2125,9 @@ Response 404: `{ "errorCode": "UPDATE_FAILED", "message": "Complaint not found" 
 
 ## 17. PREORDER CAMPAIGNS
 
-### GET /api/PreorderCampaigns/active
+### GET /api/PreorderCampaigns
 
-Gets all active preorder campaigns.
+Gets all preorder campaigns regardless of status (upcoming, active, ended). Ordered by newest first.
 
 Roles allowed: Public (no authentication required)
 
@@ -2154,6 +2158,33 @@ Response 200: List of campaign objects with associated frames.
       }
     ]
   }
+]
+```
+
+---
+
+### GET /api/PreorderCampaigns/active
+
+Gets all active preorder campaigns (currently running: start date ? now ? end date, status is `upcoming` or `active`).
+
+Roles allowed: Public (no authentication required)
+
+Response 200: List of campaign objects with associated frames (same format as `GET /api/PreorderCampaigns`).
+
+---
+
+### GET /api/PreorderCampaigns/statuses
+
+Gets the list of possible campaign status values.
+
+Roles allowed: Public (no authentication required)
+
+Response 200:
+```json
+[
+  { "value": "upcoming", "description": "Campaign has not started yet" },
+  { "value": "active", "description": "Campaign is currently running" },
+  { "value": "ended", "description": "Campaign has ended" }
 ]
 ```
 

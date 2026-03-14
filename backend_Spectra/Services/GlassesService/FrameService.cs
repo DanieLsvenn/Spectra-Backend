@@ -76,14 +76,14 @@ namespace Services.GlassesService
         private const string InactiveStatus = "inactive";
 
         // Size attribute validation ranges
-        private const int MinLensWidth = 38;
-        private const int MaxLensWidth = 62;
-        private const int MinBridgeWidth = 12;
-        private const int MaxBridgeWidth = 24;
-        private const int MinFrameWidth = 115;
-        private const int MaxFrameWidth = 155;
-        private const int MinTempleLength = 115;
-        private const int MaxTempleLength = 155;
+        //private const int MinLensWidth = 38;
+        //private const int MaxLensWidth = 62;
+        //private const int MinBridgeWidth = 12;
+        //private const int MaxBridgeWidth = 24;
+        //private const int MinFrameWidth = 115;
+        //private const int MaxFrameWidth = 155;
+        //private const int MinTempleLength = 115;
+        //private const int MaxTempleLength = 155;
 
         private static readonly string[] ValidSizes = { "small", "medium", "large", "extra-large" };
 
@@ -608,41 +608,41 @@ namespace Services.GlassesService
         {
             var result = new FrameValidationResult { IsValid = true };
 
-            if (lensWidth.HasValue)
-            {
-                if (lensWidth < MinLensWidth || lensWidth > MaxLensWidth)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Lens width must be between {MinLensWidth}mm and {MaxLensWidth}mm");
-                }
-            }
+            //if (lensWidth.HasValue)
+            //{
+            //    if (lensWidth < MinLensWidth || lensWidth > MaxLensWidth)
+            //    {
+            //        result.IsValid = false;
+            //        result.Errors.Add($"Lens width must be between {MinLensWidth}mm and {MaxLensWidth}mm");
+            //    }
+            //}
 
-            if (bridgeWidth.HasValue)
-            {
-                if (bridgeWidth < MinBridgeWidth || bridgeWidth > MaxBridgeWidth)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Bridge width must be between {MinBridgeWidth}mm and {MaxBridgeWidth}mm");
-                }
-            }
+            //if (bridgeWidth.HasValue)
+            //{
+            //    if (bridgeWidth < MinBridgeWidth || bridgeWidth > MaxBridgeWidth)
+            //    {
+            //        result.IsValid = false;
+            //        result.Errors.Add($"Bridge width must be between {MinBridgeWidth}mm and {MaxBridgeWidth}mm");
+            //    }
+            //}
 
-            if (frameWidth.HasValue)
-            {
-                if (frameWidth < MinFrameWidth || frameWidth > MaxFrameWidth)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Frame width must be between {MinFrameWidth}mm and {MaxFrameWidth}mm");
-                }
-            }
+            //if (frameWidth.HasValue)
+            //{
+            //    if (frameWidth < MinFrameWidth || frameWidth > MaxFrameWidth)
+            //    {
+            //        result.IsValid = false;
+            //        result.Errors.Add($"Frame width must be between {MinFrameWidth}mm and {MaxFrameWidth}mm");
+            //    }
+            //}
 
-            if (templeLength.HasValue)
-            {
-                if (templeLength < MinTempleLength || templeLength > MaxTempleLength)
-                {
-                    result.IsValid = false;
-                    result.Errors.Add($"Temple length must be between {MinTempleLength}mm and {MaxTempleLength}mm");
-                }
-            }
+            //if (templeLength.HasValue)
+            //{
+            //    if (templeLength < MinTempleLength || templeLength > MaxTempleLength)
+            //    {
+            //        result.IsValid = false;
+            //        result.Errors.Add($"Temple length must be between {MinTempleLength}mm and {MaxTempleLength}mm");
+            //    }
+            //}
 
             // Size validation
             if (!string.IsNullOrEmpty(size))
