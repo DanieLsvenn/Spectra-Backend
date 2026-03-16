@@ -210,6 +210,7 @@
         public string? Status { get; set; }
         public DateTime? CreatedAt { get; set; }
         public int ItemCount { get; set; }
+        public Guid? ConvertedFromPreorderId { get; set; }
     }
 
     #endregion
@@ -220,6 +221,7 @@
     {
         public Guid? CampaignId { get; set; }
         public DateTime? ExpectedDate { get; set; }
+        public string? ShippingAddress { get; set; }
         public List<CreatePreorderItemRequest> Items { get; set; } = new();
     }
 
@@ -687,6 +689,42 @@
         public Services.GlassesService.GoShipAddress AddressFrom { get; set; } = new();
         public Services.GlassesService.GoShipAddress AddressTo { get; set; } = new();
         public Services.GlassesService.GoShipParcel Parcel { get; set; } = new();
+    }
+
+    #endregion
+
+    #region Frame Response Models
+
+    /// <summary>
+    /// Wraps a Frame entity with optional preorder info for the public API response.
+    /// </summary>
+    public class FrameWithPreorderResponse
+    {
+        public Guid FrameId { get; set; }
+        public string? FrameName { get; set; }
+        public Guid? BrandId { get; set; }
+        public Guid? MaterialId { get; set; }
+        public Guid? ShapeId { get; set; }
+        public int? LensWidth { get; set; }
+        public int? BridgeWidth { get; set; }
+        public int? FrameWidth { get; set; }
+        public int? TempleLength { get; set; }
+        public string? Size { get; set; }
+        public double? BasePrice { get; set; }
+        public string? Status { get; set; }
+        public int? StockQuantity { get; set; }
+        public int? ReorderLevel { get; set; }
+        public double? MinRx { get; set; }
+        public double? MaxRx { get; set; }
+        public int? MinPd { get; set; }
+        public int? MaxPd { get; set; }
+        public object? Brand { get; set; }
+        public object? Material { get; set; }
+        public object? Shape { get; set; }
+        public object? FrameColors { get; set; }
+        public object? FrameMedia { get; set; }
+        public object? FrameLensTypes { get; set; }
+        public Services.GlassesService.PreorderInfoDto? PreorderInfo { get; set; }
     }
 
     #endregion

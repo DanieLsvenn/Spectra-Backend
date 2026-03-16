@@ -105,7 +105,7 @@ namespace Services.GlassesService
             // Set order defaults
             order.OrderId = Guid.NewGuid();
             order.Status = OrderStatus.Pending;
-            order.CreatedAt = DateTime.UtcNow;
+            order.CreatedAt = TimeHelper.Now;
 
             // Calculate total amount
             order.TotalAmount = await CalculateOrderTotalAsync(orderItems);
@@ -395,7 +395,7 @@ namespace Services.GlassesService
                             result.IsValid = false;
                             result.Errors.Add("Prescription does not belong to the current user");
                         }
-                        else if (prescription.ExpirationDate.HasValue && prescription.ExpirationDate < DateTime.UtcNow)
+                        else if (prescription.ExpirationDate.HasValue && prescription.ExpirationDate < TimeHelper.Now)
                         {
                             result.IsValid = false;
                             result.Errors.Add("Prescription has expired");
@@ -620,7 +620,7 @@ namespace Services.GlassesService
             // Set arrival date when delivered
             if (newStatus == OrderStatus.Delivered)
             {
-                order.ArrivalDate = DateTime.UtcNow;
+                order.ArrivalDate = TimeHelper.Now;
             }
 
             // Restore stock when order is cancelled

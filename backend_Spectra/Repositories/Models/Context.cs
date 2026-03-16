@@ -511,6 +511,13 @@ public partial class Context : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("shippingCarrier");
+            entity.Property(e => e.ConvertedFromPreorderId)
+                .HasColumnName("convertedFromPreorderId");
+
+            entity.HasOne(d => d.ConvertedFromPreorder)
+                .WithMany()
+                .HasForeignKey(d => d.ConvertedFromPreorderId)
+                .HasConstraintName("FK_ORDERS_PREORDER_CONVERTED");
 
             entity.HasOne(d => d.User).WithMany(p => p.Orders)
                 .HasForeignKey(d => d.UserId)
@@ -628,6 +635,9 @@ public partial class Context : DbContext
                 .HasColumnType("text")
                 .HasColumnName("adminNotes");
             entity.Property(e => e.TotalAmount).HasColumnName("totalAmount");
+            entity.Property(e => e.ShippingAddress)
+                .HasMaxLength(500)
+                .HasColumnName("shippingAddress");
 
             entity.HasOne(d => d.User).WithMany(p => p.Preorders)
                 .HasForeignKey(d => d.UserId)

@@ -255,7 +255,7 @@ namespace Services.GlassesService
 
             order.TrackingNumber = trackingNumber;
             order.ShippingCarrier = carrier;
-            order.ShippedAt = DateTime.UtcNow;
+            order.ShippedAt = TimeHelper.Now;
 
             if (order.Status?.ToLower() == "processing")
             {

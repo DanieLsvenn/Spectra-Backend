@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Repositories.ModelExtensions;
 using Repositories.Models;
 using Services.GlassesService;
 using SpectraGlasses.WebAPI.Models;
@@ -11,10 +12,12 @@ namespace SpectraGlasses.WebAPI.Controllers
     public class FramesController : ControllerBase
     {
         private readonly IFrameService _frameService;
+        private readonly IPreorderCampaignService _campaignService;
 
-        public FramesController(IFrameService frameService)
+        public FramesController(IFrameService frameService, IPreorderCampaignService campaignService)
         {
             _frameService = frameService;
+            _campaignService = campaignService;
         }
 
         #region Public Endpoints (No Authorization)
@@ -36,7 +39,20 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             var result = await _frameService.GetAvailableFramesAsync(page, pageSize);
 
-            return Ok(result);
+            // Enrich frames with preorder info for out-of-stock frames in active campaigns
+            var activeCampaignFrameInfo = await _campaignService.GetActiveCampaignFrameInfoAsync();
+            var enrichedItems = result.Items
+                .Select(f => MapToFrameWithPreorderResponse(f, activeCampaignFrameInfo))
+                .ToList();
+
+            return Ok(new PaginationResult<FrameWithPreorderResponse>
+            {
+                TotalItems = result.TotalItems,
+                TotalPages = result.TotalPages,
+                CurrentPage = result.CurrentPage,
+                PageSize = result.PageSize,
+                Items = enrichedItems
+            });
         }
 
         /// <summary>
@@ -60,7 +76,11 @@ namespace SpectraGlasses.WebAPI.Controllers
                 });
             }
 
-            return Ok(frame);
+            // Enrich frame with preorder info if out of stock and in an active campaign
+            var activeCampaignFrameInfo = await _campaignService.GetActiveCampaignFrameInfoAsync();
+            var enrichedFrame = MapToFrameWithPreorderResponse(frame, activeCampaignFrameInfo);
+
+            return Ok(enrichedFrame);
         }
 
         /// <summary>
@@ -420,6 +440,57 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             var result = await _frameService.UpdateFrameAsync(id, updatedFrame);
             return Ok(result);
+        }
+
+        #endregion
+
+        #region Private Helpers
+
+        /// <summary>
+        /// Maps a Frame entity to a FrameWithPreorderResponse, attaching preorderInfo
+        /// when the frame is out of stock and belongs to an active campaign.
+        /// </summary>
+        private static FrameWithPreorderResponse MapToFrameWithPreorderResponse(
+            Frame frame,
+            Dictionary<Guid, PreorderInfoDto> activeCampaignFrameInfo)
+        {
+            var isOutOfStock = (frame.StockQuantity ?? 0) <= 0
+                || string.Equals(frame.Status, "out_of_stock", StringComparison.OrdinalIgnoreCase);
+
+            PreorderInfoDto? preorderInfo = null;
+            if (isOutOfStock && activeCampaignFrameInfo.TryGetValue(frame.FrameId, out var info))
+            {
+                preorderInfo = info;
+            }
+
+            return new FrameWithPreorderResponse
+            {
+                FrameId = frame.FrameId,
+                FrameName = frame.FrameName,
+                BrandId = frame.BrandId,
+                MaterialId = frame.MaterialId,
+                ShapeId = frame.ShapeId,
+                LensWidth = frame.LensWidth,
+                BridgeWidth = frame.BridgeWidth,
+                FrameWidth = frame.FrameWidth,
+                TempleLength = frame.TempleLength,
+                Size = frame.Size,
+                BasePrice = frame.BasePrice,
+                Status = frame.Status,
+                StockQuantity = frame.StockQuantity,
+                ReorderLevel = frame.ReorderLevel,
+                MinRx = frame.MinRx,
+                MaxRx = frame.MaxRx,
+                MinPd = frame.MinPd,
+                MaxPd = frame.MaxPd,
+                Brand = frame.Brand,
+                Material = frame.Material,
+                Shape = frame.Shape,
+                FrameColors = frame.FrameColors,
+                FrameMedia = frame.FrameMedia,
+                FrameLensTypes = frame.FrameLensTypes,
+                PreorderInfo = preorderInfo
+            };
         }
 
         #endregion

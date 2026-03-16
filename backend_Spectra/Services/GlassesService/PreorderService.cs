@@ -90,12 +90,12 @@ namespace Services.GlassesService
         {
             preorder.PreorderId = Guid.NewGuid();
             preorder.Status = PreorderStatus.Pending;
-            preorder.CreatedAt = DateTime.UtcNow;
+            preorder.CreatedAt = TimeHelper.Now;
 
             // Set expected date (default 14 days from now if not specified)
             if (!preorder.ExpectedDate.HasValue)
             {
-                preorder.ExpectedDate = DateTime.UtcNow.AddDays(14);
+                preorder.ExpectedDate = TimeHelper.Now.AddDays(14);
             }
 
             var createdPreorder = await _preorderRepository.CreateAsync(preorder);
@@ -468,8 +468,9 @@ namespace Services.GlassesService
                 UserId = preorder.UserId,
                 ShippingAddress = shippingAddress,
                 Status = OrderService.OrderStatus.Confirmed,
-                CreatedAt = DateTime.UtcNow,
-                TotalAmount = 0
+                CreatedAt = TimeHelper.Now,
+                TotalAmount = 0,
+                ConvertedFromPreorderId = preorder.PreorderId
             };
 
             // Calculate total and create order

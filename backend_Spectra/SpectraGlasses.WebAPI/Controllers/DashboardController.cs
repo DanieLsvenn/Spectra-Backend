@@ -46,7 +46,7 @@ namespace SpectraGlasses.WebAPI.Controllers
             [FromQuery] DateTime? endDate = null)
         {
             // Default to last 30 days
-            var end = endDate ?? DateTime.UtcNow;
+            var end = endDate ?? TimeHelper.Now;
             var start = startDate ?? end.AddDays(-30);
 
             if (start > end)
@@ -72,7 +72,7 @@ namespace SpectraGlasses.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> GetMonthlyRevenue([FromQuery] int? year = null)
         {
-            var targetYear = year ?? DateTime.UtcNow.Year;
+            var targetYear = year ?? TimeHelper.Now.Year;
             var revenue = await _dashboardService.GetMonthlyRevenueAsync(targetYear);
             return Ok(revenue);
         }

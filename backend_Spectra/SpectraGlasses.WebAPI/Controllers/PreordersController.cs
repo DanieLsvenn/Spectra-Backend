@@ -121,7 +121,8 @@ namespace SpectraGlasses.WebAPI.Controllers
             {
                 UserId = userId,
                 ExpectedDate = request.ExpectedDate,
-                CampaignId = request.CampaignId
+                CampaignId = request.CampaignId,
+                ShippingAddress = request.ShippingAddress
             };
 
             var createdPreorder = await _preorderService.CreatePreorderAsync(preorder, preorderItems);

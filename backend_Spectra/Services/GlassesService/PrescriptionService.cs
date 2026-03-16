@@ -74,12 +74,12 @@ namespace Services.GlassesService
         public async Task<Prescription> CreatePrescriptionAsync(Prescription prescription)
         {
             prescription.PrescriptionId = Guid.NewGuid();
-            prescription.CreatedAt = DateTime.UtcNow;
+            prescription.CreatedAt = TimeHelper.Now;
 
             // Set default expiration date if not provided (2 years from creation)
             if (!prescription.ExpirationDate.HasValue)
             {
-                prescription.ExpirationDate = DateTime.UtcNow.AddMonths(DefaultExpirationMonths);
+                prescription.ExpirationDate = TimeHelper.Now.AddMonths(DefaultExpirationMonths);
             }
 
             return await _prescriptionRepository.CreateAsync(prescription);
@@ -163,7 +163,7 @@ namespace Services.GlassesService
             }
 
             // Validate expiration date
-            if (prescription.ExpirationDate.HasValue && prescription.ExpirationDate < DateTime.UtcNow)
+            if (prescription.ExpirationDate.HasValue && prescription.ExpirationDate < TimeHelper.Now)
             {
                 result.IsValid = false;
                 result.Errors.Add("Prescription expiration date cannot be in the past");
@@ -251,7 +251,7 @@ namespace Services.GlassesService
         {
             var prescriptions = await _prescriptionRepository.SearchAsync(
                 p => p.UserId == userId &&
-                     (p.ExpirationDate == null || p.ExpirationDate > DateTime.UtcNow));
+                     (p.ExpirationDate == null || p.ExpirationDate > TimeHelper.Now));
             
             return prescriptions.OrderByDescending(p => p.CreatedAt).ToList();
         }
@@ -373,7 +373,7 @@ namespace Services.GlassesService
                 return false; // No expiration date means not expired
             }
 
-            return prescription.ExpirationDate < DateTime.UtcNow;
+            return prescription.ExpirationDate < TimeHelper.Now;
         }
 
         public bool IsPrescriptionValid(Prescription prescription)
@@ -400,7 +400,7 @@ namespace Services.GlassesService
                 return int.MaxValue; // No expiration
             }
 
-            var daysUntilExpiration = (prescription.ExpirationDate.Value - DateTime.UtcNow).Days;
+            var daysUntilExpiration = (prescription.ExpirationDate.Value - TimeHelper.Now).Days;
             return daysUntilExpiration < 0 ? 0 : daysUntilExpiration;
         }
 

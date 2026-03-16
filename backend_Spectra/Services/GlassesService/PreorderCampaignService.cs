@@ -7,6 +7,24 @@ using Repositories.Models;
 
 namespace Services.GlassesService
 {
+    /// <summary>
+    /// Preorder info to attach to a Frame response when the frame is out of stock
+    /// but belongs to an active campaign.
+    /// </summary>
+    public class PreorderInfoDto
+    {
+        public Guid CampaignId { get; set; }
+        public string CampaignName { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public int? MaxSlots { get; set; }
+        public int CurrentSlots { get; set; }
+        public DateTime? EstimatedDeliveryDate { get; set; }
+        public double? CampaignPrice { get; set; }
+        public int MaxQuantityPerOrder { get; set; }
+    }
+
     public interface IPreorderCampaignService
     {
         Task<PreorderCampaign> CreateCampaignAsync(PreorderCampaign campaign, List<CampaignFrame> frames);
@@ -21,6 +39,12 @@ namespace Services.GlassesService
         /// Returns the set of FrameIds that belong to upcoming (not yet started) campaigns.
         /// </summary>
         Task<HashSet<Guid>> GetUpcomingCampaignFrameIdsAsync();
+
+        /// <summary>
+        /// Returns a dictionary mapping FrameId to PreorderInfoDto for frames that belong
+        /// to currently active campaigns (status == "active").
+        /// </summary>
+        Task<Dictionary<Guid, PreorderInfoDto>> GetActiveCampaignFrameInfoAsync();
     }
 
     public class PreorderCampaignService : IPreorderCampaignService
@@ -39,12 +63,63 @@ namespace Services.GlassesService
             _frameRepository = frameRepository;
         }
 
+        /// <summary>
+        /// Computes the effective runtime status of a campaign based on its dates and
+        /// persisted status. If the persisted status is "upcoming" but the current time
+        /// is within [StartDate, EndDate], the effective status is "active".
+        /// If the current time is past EndDate and the status is not already "ended",
+        /// the effective status is "ended".
+        /// </summary>
+        private static string ResolveEffectiveStatus(PreorderCampaign campaign, DateTime now)
+        {
+            // If the campaign was manually ended, respect that.
+            if (string.Equals(campaign.Status, "ended", StringComparison.OrdinalIgnoreCase))
+                return "ended";
+
+            // Past the end date ? ended
+            if (now > campaign.EndDate)
+                return "ended";
+
+            // Within the date range ? active
+            if (now >= campaign.StartDate && now <= campaign.EndDate)
+                return "active";
+
+            // Before the start date ? upcoming
+            return "upcoming";
+        }
+
+        /// <summary>
+        /// Auto-corrects a campaign's persisted status if it is stale (e.g. still "upcoming"
+        /// when it should be "active" based on dates). Persists the change to the database
+        /// so subsequent queries are consistent.
+        /// </summary>
+        private async Task AutoUpdateCampaignStatusAsync(PreorderCampaign campaign, DateTime now)
+        {
+            var effectiveStatus = ResolveEffectiveStatus(campaign, now);
+            if (!string.Equals(campaign.Status, effectiveStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                campaign.Status = effectiveStatus;
+                await _campaignRepository.UpdateAsync(campaign);
+            }
+        }
+
+        /// <summary>
+        /// Auto-corrects persisted statuses for a batch of campaigns.
+        /// </summary>
+        private async Task AutoUpdateCampaignStatusesAsync(List<PreorderCampaign> campaigns, DateTime now)
+        {
+            foreach (var campaign in campaigns)
+            {
+                await AutoUpdateCampaignStatusAsync(campaign, now);
+            }
+        }
+
         public async Task<PreorderCampaign> CreateCampaignAsync(PreorderCampaign campaign, List<CampaignFrame> frames)
         {
             campaign.CampaignId = Guid.NewGuid();
             campaign.Status = "upcoming";
             campaign.CurrentSlots = 0;
-            campaign.CreatedAt = DateTime.UtcNow;
+            campaign.CreatedAt = TimeHelper.Now;
 
             // Validate that all referenced frames exist
             foreach (var frame in frames)
@@ -74,14 +149,24 @@ namespace Services.GlassesService
         public async Task<List<PreorderCampaign>> GetAllCampaignsAsync()
         {
             var campaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
-            return campaigns.OrderByDescending(c => c.CreatedAt).ToList();
+            var list = campaigns.OrderByDescending(c => c.CreatedAt).ToList();
+
+            // Auto-correct stale statuses
+            await AutoUpdateCampaignStatusesAsync(list, TimeHelper.Now);
+
+            return list;
         }
 
         public async Task<List<PreorderCampaign>> GetActiveCampaignsAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = TimeHelper.Now;
             var campaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
-            return campaigns
+            var list = campaigns.ToList();
+
+            // Auto-correct stale statuses before filtering
+            await AutoUpdateCampaignStatusesAsync(list, now);
+
+            return list
                 .Where(c => c.StartDate <= now && c.EndDate >= now &&
                             (c.Status == "upcoming" || c.Status == "active"))
                 .ToList();
@@ -92,7 +177,14 @@ namespace Services.GlassesService
             var campaigns = await _campaignRepository.SearchAsyncInclude(
                 c => c.CampaignId == campaignId,
                 c => c.CampaignFrames);
-            return campaigns.FirstOrDefault();
+            var campaign = campaigns.FirstOrDefault();
+
+            if (campaign != null)
+            {
+                await AutoUpdateCampaignStatusAsync(campaign, TimeHelper.Now);
+            }
+
+            return campaign;
         }
 
         public async Task<PreorderCampaign?> UpdateCampaignAsync(Guid campaignId, PreorderCampaign updates)
@@ -122,7 +214,7 @@ namespace Services.GlassesService
             if (existing == null) return false;
 
             existing.Status = "ended";
-            existing.EndDate = DateTime.UtcNow;
+            existing.EndDate = TimeHelper.Now;
             await _campaignRepository.UpdateAsync(existing);
             return true;
         }
@@ -132,7 +224,7 @@ namespace Services.GlassesService
             var campaign = await GetCampaignByIdAsync(campaignId);
             if (campaign == null) return false;
 
-            var now = DateTime.UtcNow;
+            var now = TimeHelper.Now;
             if (campaign.StartDate > now || campaign.EndDate < now)
                 return false;
 
@@ -169,15 +261,62 @@ namespace Services.GlassesService
 
         public async Task<HashSet<Guid>> GetUpcomingCampaignFrameIdsAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = TimeHelper.Now;
             var campaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
-            return campaigns
+            var list = campaigns.ToList();
+
+            // Auto-correct stale statuses so that campaigns whose start date
+            // has passed are no longer treated as "upcoming"
+            await AutoUpdateCampaignStatusesAsync(list, now);
+
+            return list
                 .Where(c => string.Equals(c.Status, "upcoming", StringComparison.OrdinalIgnoreCase)
                              && c.StartDate > now)
                 .SelectMany(c => c.CampaignFrames)
                 .Where(cf => cf.FrameId.HasValue)
                 .Select(cf => cf.FrameId!.Value)
                 .ToHashSet();
+        }
+
+        public async Task<Dictionary<Guid, PreorderInfoDto>> GetActiveCampaignFrameInfoAsync()
+        {
+            var now = TimeHelper.Now;
+            var campaigns = await _campaignRepository.GetAllAsyncInclude(c => c.CampaignFrames);
+            var list = campaigns.ToList();
+
+            // Auto-correct stale statuses so that campaigns within their date range
+            // are properly marked "active"
+            await AutoUpdateCampaignStatusesAsync(list, now);
+
+            var activeCampaigns = list
+                .Where(c => c.StartDate <= now && c.EndDate >= now && c.Status == "active")
+                .ToList();
+
+            var frameInfoDict = new Dictionary<Guid, PreorderInfoDto>();
+            foreach (var campaign in activeCampaigns)
+            {
+                foreach (var frame in campaign.CampaignFrames)
+                {
+                    if (frame.FrameId.HasValue)
+                    {
+                        frameInfoDict[frame.FrameId.Value] = new PreorderInfoDto
+                        {
+                            CampaignId = campaign.CampaignId,
+                            CampaignName = campaign.CampaignName,
+                            Description = campaign.Description,
+                            StartDate = campaign.StartDate,
+                            EndDate = campaign.EndDate,
+                            MaxSlots = campaign.MaxSlots,
+                            CurrentSlots = campaign.CurrentSlots,
+                            EstimatedDeliveryDate = campaign.EstimatedDeliveryDate,
+                            CampaignPrice = frame.CampaignPrice,
+                            MaxQuantityPerOrder = frame.MaxQuantityPerOrder
+                        };
+                    }
+                }
+            }
+
+            return frameInfoDict;
         }
     }
 }

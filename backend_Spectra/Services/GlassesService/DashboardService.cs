@@ -299,7 +299,7 @@ namespace Services.GlassesService
 
         public async Task<OrderSummary> GetOrderSummaryAsync()
         {
-            var today = DateTime.UtcNow.Date;
+            var today = TimeHelper.Now.Date;
             var weekStart = today.AddDays(-(int)today.DayOfWeek);
             var monthStart = new DateTime(today.Year, today.Month, 1);
 

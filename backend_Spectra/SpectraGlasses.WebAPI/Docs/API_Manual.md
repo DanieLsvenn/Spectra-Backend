@@ -397,7 +397,27 @@ Visibility rules:
 - Frames with status `inactive` are never shown
 - **Note:** Admin inventory endpoints (`GET /api/Frames/inventory/out-of-stock`, `GET /api/Frames/inventory/low-stock`) are **not** affected by these rules and always return all matching frames regardless of campaign status
 
-Response 200: Paginated list of frames. Each frame includes `brand`, `material`, `shape`, `frameColors`, and `frameMedia`.
+Preorder info enrichment:
+- If a frame is out of stock (`stockQuantity == 0` or `status == "out_of_stock"`) **and** belongs to a currently **active** campaign (`status == "active"`), the response includes a `preorderInfo` object
+- If the conditions are not met, `preorderInfo` is `null`
+
+Response 200: Paginated list of frames. Each frame includes `brand`, `material`, `shape`, `frameColors`, `frameMedia`, and `preorderInfo`.
+
+Example `preorderInfo` (when present):
+```json
+{
+  "campaignId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "campaignName": "Summer Collection Pre-order",
+  "description": "Pre-order for out-of-stock summer frames",
+  "startDate": "2025-06-01T00:00:00",
+  "endDate": "2025-07-01T00:00:00",
+  "maxSlots": 100,
+  "currentSlots": 25,
+  "estimatedDeliveryDate": "2025-08-15T00:00:00",
+  "campaignPrice": 89.99,
+  "maxQuantityPerOrder": 2
+}
+```
 
 ---
 
@@ -413,7 +433,11 @@ Visibility rules:
 - Any non-inactive frame is returned (both `available` and `out_of_stock`)
 - Inactive frames are never returned (404)
 
-Response 200: Frame object with details.
+Preorder info enrichment:
+- If the frame is out of stock (`stockQuantity == 0` or `status == "out_of_stock"`) **and** belongs to a currently **active** campaign (`status == "active"`), the response includes a `preorderInfo` object
+- If the conditions are not met, `preorderInfo` is `null`
+
+Response 200: Frame object with details including `preorderInfo`.
 
 Response 404: `{ "errorCode": "FRAME_NOT_FOUND", "message": "Frame not found or is not available" }`
 
@@ -1641,7 +1665,8 @@ Response 201:
   "shippingAddress": "123 Main St",
   "status": "pending",
   "createdAt": "2025-01-15T00:00:00",
-  "itemCount": 2
+  "itemCount": 2,
+  "convertedFromPreorderId": null
 }
 ```
 
@@ -1667,7 +1692,7 @@ Roles allowed: Any authenticated user
 
 Path parameter `id`: GUID of the order.
 
-Response 200: Order object with order items and details.
+Response 200: Order object with order items, details, and `convertedFromPreorderId` (GUID of the original preorder if this order was converted from a preorder, otherwise `null`)
 
 Response 403: Forbidden (if customer tries to access another user's order).
 
@@ -2280,6 +2305,7 @@ Request body:
 {
   "campaignId": "guid",
   "expectedDate": "2025-08-15T00:00:00",
+  "shippingAddress": "123 Nguy?n Hu?, Qu?n 1, TP.HCM",
   "items": [
     {
       "frameId": "guid",
@@ -2298,9 +2324,10 @@ Request body:
 Validation:
 - `items` must contain at least one item
 - `campaignId` is optional — if provided, the preorder is validated against campaign rules (active status, available slots, matching frames, quantity limits)
+- `shippingAddress` is optional — can be provided at preorder creation or later at conversion
 - Preorder items are validated (frame availability, lens type compatibility, prescription requirements)
 
-Response 201: Created preorder object.
+Response 201: Created preorder object (includes `shippingAddress`).
 
 Response 400: `{ "errorCode": "CAMPAIGN_VALIDATION_ERROR", "message": "Preorder does not meet campaign requirements..." }`
 
@@ -2314,7 +2341,7 @@ Roles allowed: `customer`
 
 Query parameters: `page`, `pageSize`
 
-Response 200: Paginated list of preorder objects.
+Response 200: Paginated list of preorder objects. Each preorder includes `shippingAddress`.
 
 ---
 
@@ -2326,7 +2353,7 @@ Roles allowed: Any authenticated user
 
 Path parameter `id`: GUID of the preorder.
 
-Response 200: Preorder object with items and details.
+Response 200: Preorder object with items, details, and `shippingAddress`.
 
 Response 403: Forbidden (if customer tries to access another user's preorder).
 
@@ -2358,7 +2385,7 @@ Roles allowed: `staff`, `manager`, `admin`
 
 Query parameters: `page`, `pageSize`
 
-Response 200: Paginated list of preorder objects.
+Response 200: Paginated list of preorder objects. Each preorder includes `shippingAddress`.
 
 ---
 
@@ -2387,7 +2414,7 @@ Response 404: `{ "errorCode": "UPDATE_FAILED", "message": "Preorder not found or
 
 ### POST /api/Preorders/{id}/convert
 
-Converts a preorder to an order.
+Converts a preorder to an order. The resulting order stores a reference back to the original preorder via `convertedFromPreorderId`.
 
 Roles allowed: `staff`, `manager`, `admin`
 
@@ -2404,7 +2431,20 @@ Validation:
 - `shippingAddress` is required
 - Preorder must be in `paid` or `confirmed` status
 
-Response 200: Created order object.
+Response 200: Created order object. The `convertedFromPreorderId` field is set to the original preorder's ID, allowing the frontend to trace the order back to its preorder origin (e.g., for display on the shipping page).
+
+Example response:
+```json
+{
+  "orderId": "order-XYZ-guid",
+  "convertedFromPreorderId": "preorder-ABC-guid",
+  "status": "confirmed",
+  "userId": "guid",
+  "totalAmount": 150.0,
+  "shippingAddress": "123 Main St",
+  "createdAt": "2025-01-15T00:00:00"
+}
+```
 
 Response 400: `{ "errorCode": "CONVERSION_FAILED", "message": "Preorder cannot be converted. It must be in 'paid' or 'confirmed' status." }`
 
@@ -2486,7 +2526,7 @@ Request body:
     "city": "H? Chí Minh"
   },
   "addressTo": {
-    "name": "Nguy?n V?n A",
+    "name": "Nguy?n Vân A",
     "phone": "0987654321",
     "street": "456 Lê L?i",
     "ward": "Ph??ng 1",
@@ -2567,7 +2607,7 @@ Request body:
     "city": "H? Chí Minh"
   },
   "addressTo": {
-    "name": "Nguy?n V?n A",
+    "name": "Nguy?n Vân A",
     "phone": "0987654321",
     "street": "456 Lê L?i",
     "ward": "Ph??ng 1",

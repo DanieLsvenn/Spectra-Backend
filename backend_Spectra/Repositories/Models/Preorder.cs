@@ -23,6 +23,8 @@ public partial class Preorder
 
     public double? TotalAmount { get; set; }
 
+    public string ShippingAddress { get; set; }
+
     public virtual PreorderCampaign Campaign { get; set; }
 
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();

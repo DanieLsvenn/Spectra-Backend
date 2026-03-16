@@ -284,7 +284,7 @@ namespace Services.GlassesService
 
             if (status.ToLower() == PaymentStatus.Completed)
             {
-                payment.PaidAt = DateTime.UtcNow;
+                payment.PaidAt = TimeHelper.Now;
             }
 
             return await _paymentRepository.UpdateAsync(payment);
@@ -338,18 +338,7 @@ namespace Services.GlassesService
                 var vnpayAmount = (long)(amountInVnd * 100);
 
                 // Use Vietnam timezone (UTC+7) for VNPay
-                TimeZoneInfo vietnamTimeZone;
-                try
-                {
-                    // Windows
-                    vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
-                }
-                catch
-                {
-                    // Linux/Mac
-                    vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
-                }
-                var vietnamNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone);
+                var vietnamNow = TimeHelper.Now;
 
                 var vnpay = new SortedDictionary<string, string>();
 
@@ -477,7 +466,7 @@ namespace Services.GlassesService
             }
 
             payment.PaymentStatus = PaymentStatus.Completed;
-            payment.PaidAt = DateTime.UtcNow;
+            payment.PaidAt = TimeHelper.Now;
 
             var updatedPayment = await _paymentRepository.UpdateAsync(payment);
 

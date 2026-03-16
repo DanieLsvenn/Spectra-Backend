@@ -102,7 +102,7 @@ namespace Services.GlassesService
         {
             complaint.RequestId = Guid.NewGuid();
             complaint.Status = ComplaintStatus.Pending;
-            complaint.CreatedAt = DateTime.UtcNow;
+            complaint.CreatedAt = TimeHelper.Now;
 
             return await _complaintRepository.CreateAsync(complaint);
         }

@@ -209,7 +209,7 @@ namespace Services.GlassesService
         public async Task<User> CreateUserAsync(User user)
         {
             user.UserId = Guid.NewGuid();
-            user.CreatedAt = DateTime.UtcNow;
+            user.CreatedAt = TimeHelper.Now;
 
             // Set defaults
             if (string.IsNullOrEmpty(user.Status))

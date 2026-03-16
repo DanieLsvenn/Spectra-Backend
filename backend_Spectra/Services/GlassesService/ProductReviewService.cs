@@ -73,7 +73,7 @@ namespace Services.GlassesService
 
             review.ReviewId = Guid.NewGuid();
             review.Status = "visible";
-            review.CreatedAt = DateTime.UtcNow;
+            review.CreatedAt = TimeHelper.Now;
 
             return await _reviewRepository.CreateAsync(review);
         }
@@ -114,7 +114,7 @@ namespace Services.GlassesService
                 existing.Title = update.Title;
             if (update.Comment != null)
                 existing.Comment = update.Comment;
-            existing.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedAt = TimeHelper.Now;
 
             return await _reviewRepository.UpdateAsync(existing);
         }

@@ -123,7 +123,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 ShippingAddress = createdOrder.ShippingAddress,
                 Status = createdOrder.Status,
                 CreatedAt = createdOrder.CreatedAt,
-                ItemCount = createdOrder.OrderItems?.Count ?? 0
+                ItemCount = createdOrder.OrderItems?.Count ?? 0,
+                ConvertedFromPreorderId = createdOrder.ConvertedFromPreorderId
             };
 
             return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.OrderId }, summary);
