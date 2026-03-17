@@ -96,11 +96,9 @@ public partial class Context : DbContext
             entity.Property(e => e.BrandName)
                 .IsRequired()
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("brandName");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("active")
                 .HasColumnName("status");
         });
@@ -117,11 +115,9 @@ public partial class Context : DbContext
             entity.Property(e => e.MaterialName)
                 .IsRequired()
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("materialName");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("active")
                 .HasColumnName("status");
         });
@@ -138,15 +134,12 @@ public partial class Context : DbContext
             entity.Property(e => e.ColorName)
                 .IsRequired()
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("colorName");
             entity.Property(e => e.HexCode)
                 .HasMaxLength(7)
-                .IsUnicode(false)
                 .HasColumnName("hexCode");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("active")
                 .HasColumnName("status");
         });
@@ -163,11 +156,9 @@ public partial class Context : DbContext
             entity.Property(e => e.ShapeName)
                 .IsRequired()
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("shapeName");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("active")
                 .HasColumnName("status");
         });
@@ -211,7 +202,6 @@ public partial class Context : DbContext
             entity.Property(e => e.FrameId).HasColumnName("frameId");
             entity.Property(e => e.Size)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("size");
             entity.Property(e => e.IsDefault)
                 .HasDefaultValue(false)
@@ -235,11 +225,9 @@ public partial class Context : DbContext
             entity.Property(e => e.Name)
                 .IsRequired()
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("name");
             entity.Property(e => e.Description)
                 .HasMaxLength(500)
-                .IsUnicode(false)
                 .HasColumnName("description");
             entity.Property(e => e.AdditionalPrice)
                 .HasDefaultValue(0.0)
@@ -250,7 +238,6 @@ public partial class Context : DbContext
             entity.Property(e => e.ColorId).HasColumnName("colorId");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("active")
                 .HasColumnName("status");
 
@@ -277,30 +264,30 @@ public partial class Context : DbContext
                 .HasColumnType("datetime")
                 .HasColumnName("createdAt");
             entity.Property(e => e.MediaUrl)
-                .HasColumnType("text")
+                .HasColumnType("nvarchar(max)")
                 .HasColumnName("mediaUrl");
             entity.Property(e => e.OrderItemId).HasColumnName("orderItemId");
             entity.Property(e => e.Reason)
                 .HasMaxLength(250)
-                .IsUnicode(false)
                 .HasColumnName("reason");
             entity.Property(e => e.RequestType)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("requestType");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("status");
             entity.Property(e => e.UserId).HasColumnName("userId");
             entity.Property(e => e.RefundAmount).HasColumnName("refundAmount");
             entity.Property(e => e.ReturnTrackingNumber)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("returnTrackingNumber");
             entity.Property(e => e.RefundedAt)
                 .HasColumnType("datetime")
                 .HasColumnName("refundedAt");
+            entity.Property(e => e.ExchangeOrderId).HasColumnName("exchangeOrderId");
+            entity.Property(e => e.StaffNote)
+                .HasMaxLength(500)
+                .HasColumnName("staffNote");
 
             entity.HasOne(d => d.OrderItem).WithMany(p => p.ComplaintRequests)
                 .HasForeignKey(d => d.OrderItemId)
@@ -309,6 +296,10 @@ public partial class Context : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.ComplaintRequests)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("FK__COMPLAINT__userI__6D0D32F4");
+
+            entity.HasOne(d => d.ExchangeOrder).WithMany()
+                .HasForeignKey(d => d.ExchangeOrderId)
+                .HasConstraintName("FK_COMPLAINT_EXCHANGE_ORDER");
         });
 
         modelBuilder.Entity<Frame>(entity =>
@@ -326,18 +317,15 @@ public partial class Context : DbContext
             entity.Property(e => e.MaterialId).HasColumnName("materialId");
             entity.Property(e => e.FrameName)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("frameName");
             entity.Property(e => e.FrameWidth).HasColumnName("frameWidth");
             entity.Property(e => e.LensWidth).HasColumnName("lensWidth");
             entity.Property(e => e.ShapeId).HasColumnName("shapeId");
             entity.Property(e => e.Size)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("size");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("status");
             entity.Property(e => e.TempleLength).HasColumnName("templeLength");
             
@@ -389,11 +377,9 @@ public partial class Context : DbContext
             entity.Property(e => e.ColorId).HasColumnName("colorId");
             entity.Property(e => e.MediaType)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("mediaType");
             entity.Property(e => e.MediaUrl)
                 .HasMaxLength(2048)
-                .IsUnicode(false)
                 .HasColumnName("mediaUrl");
 
             entity.HasOne(d => d.Frame).WithMany(p => p.FrameMedia)
@@ -417,7 +403,6 @@ public partial class Context : DbContext
             entity.Property(e => e.ExtraPrice).HasColumnName("extraPrice");
             entity.Property(e => e.FeatureSpecification)
                 .HasMaxLength(200)
-                .IsUnicode(false)
                 .HasColumnName("featureSpecification");
         });
 
@@ -433,23 +418,19 @@ public partial class Context : DbContext
             entity.Property(e => e.BasePrice).HasColumnName("basePrice");
             entity.Property(e => e.LensSpecification)
                 .HasMaxLength(200)
-                .IsUnicode(false)
                 .HasColumnName("lensSpecification");
             entity.Property(e => e.RequiresPrescription).HasColumnName("requiresPrescription");
             entity.Property(e => e.Description)
                 .HasMaxLength(500)
-                .IsUnicode(false)
                 .HasColumnName("description");
             entity.Property(e => e.Category)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("category");
             entity.Property(e => e.BrandId).HasColumnName("brandId");
             entity.Property(e => e.MaterialId).HasColumnName("materialId");
             entity.Property(e => e.ColorId).HasColumnName("colorId");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("active")
                 .HasColumnName("status");
 
@@ -484,22 +465,18 @@ public partial class Context : DbContext
                 .HasColumnName("createdAt");
             entity.Property(e => e.ShippingAddress)
                 .HasMaxLength(200)
-                .IsUnicode(false)
                 .HasColumnName("shippingAddress");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("status");
             entity.Property(e => e.TotalAmount).HasColumnName("totalAmount");
             entity.Property(e => e.UserId).HasColumnName("userId");
             entity.Property(e => e.ShippingMethod)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("shippingMethod");
             entity.Property(e => e.ShippingFee).HasColumnName("shippingFee");
             entity.Property(e => e.TrackingNumber)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("trackingNumber");
             entity.Property(e => e.ShippedAt)
                 .HasColumnType("datetime")
@@ -509,7 +486,6 @@ public partial class Context : DbContext
                 .HasColumnName("deliveredAt");
             entity.Property(e => e.ShippingCarrier)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("shippingCarrier");
             entity.Property(e => e.ConvertedFromPreorderId)
                 .HasColumnName("convertedFromPreorderId");
@@ -544,7 +520,6 @@ public partial class Context : DbContext
             entity.Property(e => e.SelectedColorId).HasColumnName("selectedColorId");
             entity.Property(e => e.SelectedSize)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("selectedSize");
 
             entity.HasOne(d => d.Feature).WithMany(p => p.OrderItems)
@@ -592,11 +567,9 @@ public partial class Context : DbContext
                 .HasColumnName("paidAt");
             entity.Property(e => e.PaymentMethod)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("paymentMethod");
             entity.Property(e => e.PaymentStatus)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("paymentStatus");
             entity.Property(e => e.PreorderId).HasColumnName("preorderId");
 
@@ -627,12 +600,11 @@ public partial class Context : DbContext
                 .HasColumnName("expectedDate");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("status");
             entity.Property(e => e.UserId).HasColumnName("userId");
             entity.Property(e => e.CampaignId).HasColumnName("campaignId");
             entity.Property(e => e.AdminNotes)
-                .HasColumnType("text")
+                .HasColumnType("nvarchar(max)")
                 .HasColumnName("adminNotes");
             entity.Property(e => e.TotalAmount).HasColumnName("totalAmount");
             entity.Property(e => e.ShippingAddress)
@@ -668,7 +640,6 @@ public partial class Context : DbContext
             entity.Property(e => e.SelectedColorId).HasColumnName("selectedColorId");
             entity.Property(e => e.SelectedSize)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("selectedSize");
 
             entity.HasOne(d => d.Feature).WithMany(p => p.PreorderItems)
@@ -715,7 +686,6 @@ public partial class Context : DbContext
             entity.Property(e => e.AxisRight).HasColumnName("axisRight");
             entity.Property(e => e.ClinicName)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("clinicName");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
@@ -725,7 +695,6 @@ public partial class Context : DbContext
             entity.Property(e => e.CylinderRight).HasColumnName("cylinderRight");
             entity.Property(e => e.DoctorName)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("doctorName");
             entity.Property(e => e.ExpirationDate)
                 .HasColumnType("datetime")
@@ -753,7 +722,6 @@ public partial class Context : DbContext
                 .HasColumnName("userId");
             entity.Property(e => e.Address)
                 .HasMaxLength(200)
-                .IsUnicode(false)
                 .HasColumnName("address");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
@@ -762,27 +730,21 @@ public partial class Context : DbContext
             entity.Property(e => e.Email)
                 .IsRequired()
                 .HasMaxLength(150)
-                .IsUnicode(false)
                 .HasColumnName("email");
             entity.Property(e => e.FullName)
                 .HasMaxLength(100)
-                .IsUnicode(false)
                 .HasColumnName("fullName");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(255)
-                .IsUnicode(false)
                 .HasColumnName("passwordHash");
             entity.Property(e => e.Phone)
                 .HasMaxLength(20)
-                .IsUnicode(false)
                 .HasColumnName("phone");
             entity.Property(e => e.Role)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("role");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
-                .IsUnicode(false)
                 .HasColumnName("status");
         });
 
@@ -801,14 +763,12 @@ public partial class Context : DbContext
             entity.Property(e => e.Rating).HasColumnName("rating");
             entity.Property(e => e.Title)
                 .HasMaxLength(200)
-                .IsUnicode(false)
                 .HasColumnName("title");
             entity.Property(e => e.Comment)
-                .HasColumnType("text")
+                .HasColumnType("nvarchar(max)")
                 .HasColumnName("comment");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("visible")
                 .HasColumnName("status");
             entity.Property(e => e.CreatedAt)
@@ -844,10 +804,9 @@ public partial class Context : DbContext
             entity.Property(e => e.CampaignName)
                 .IsRequired()
                 .HasMaxLength(200)
-                .IsUnicode(false)
                 .HasColumnName("campaignName");
             entity.Property(e => e.Description)
-                .HasColumnType("text")
+                .HasColumnType("nvarchar(max)")
                 .HasColumnName("description");
             entity.Property(e => e.StartDate)
                 .HasColumnType("datetime")
@@ -861,7 +820,6 @@ public partial class Context : DbContext
                 .HasColumnName("currentSlots");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasDefaultValue("upcoming")
                 .HasColumnName("status");
             entity.Property(e => e.EstimatedDeliveryDate)
@@ -931,14 +889,12 @@ public partial class Context : DbContext
             entity.Property(e => e.PreorderId).HasColumnName("preorderId");
             entity.Property(e => e.PreviousStatus)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("previousStatus");
             entity.Property(e => e.NewStatus)
                 .HasMaxLength(50)
-                .IsUnicode(false)
                 .HasColumnName("newStatus");
             entity.Property(e => e.Message)
-                .HasColumnType("text")
+                .HasColumnType("nvarchar(max)")
                 .HasColumnName("message");
             entity.Property(e => e.CreatedBy).HasColumnName("createdBy");
             entity.Property(e => e.CreatedAt)

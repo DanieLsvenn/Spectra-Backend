@@ -29,7 +29,13 @@ public partial class ComplaintRequest
 
     public DateTime? RefundedAt { get; set; }
 
+    public Guid? ExchangeOrderId { get; set; }
+
+    public string StaffNote { get; set; }
+
     public virtual OrderItem OrderItem { get; set; }
 
     public virtual User User { get; set; }
+
+    public virtual Order ExchangeOrder { get; set; }
 }

@@ -2017,6 +2017,28 @@ Response 404: `{ "errorCode": "REVIEW_NOT_FOUND", "message": "Review not found" 
 
 ## 16. COMPLAINTS
 
+Complaint workflow handles customer post-purchase issues: light feedback, returns, exchanges, refunds, and warranty claims.
+
+**Status workflow (strict transitions enforced):**
+
+```
+pending ? under_review ? approved  ? in_progress ? resolved
+                       ? rejected
+Any non-terminal status ? cancelled
+```
+
+| Current Status | Allowed Next Statuses |
+|---|---|
+| `pending` | `under_review`, `cancelled` |
+| `under_review` | `approved`, `rejected` |
+| `approved` | `in_progress`, `cancelled` |
+| `rejected` | *(terminal — no further transitions)* |
+| `in_progress` | `resolved`, `cancelled` |
+| `resolved` | *(terminal)* |
+| `cancelled` | *(terminal)* |
+
+---
+
 ### POST /api/Complaints
 
 Submits a new complaint/return request.
@@ -2037,6 +2059,8 @@ Validation:
 - `requestType` must be one of: `return`, `exchange`, `refund`, `complaint`, `warranty`
 - `reason` is required
 - `mediaUrl` is optional
+- `orderItemId` must reference an existing order item that belongs to the customer's own order
+- The order must be in `delivered` status (you can only file a complaint for items you have received)
 
 Response 201:
 ```json
@@ -2049,9 +2073,17 @@ Response 201:
   "mediaUrl": "https://...",
   "status": "pending",
   "createdAt": "2025-01-15T00:00:00",
-  "canModify": true
+  "canModify": true,
+  "exchangeOrderId": null,
+  "staffNote": null
 }
 ```
+
+Response 400 (validation): `{ "errorCode": "VALIDATION_ERROR", "message": "Invalid request type. Allowed: return, exchange, refund, complaint, warranty" }`
+
+Response 400 (ownership): `{ "errorCode": "OWNERSHIP_ERROR", "message": "This order item does not belong to your order" }`
+
+Response 400 (not delivered): `{ "errorCode": "OWNERSHIP_ERROR", "message": "You can only file a complaint for delivered orders" }`
 
 ---
 
@@ -2063,7 +2095,7 @@ Roles allowed: `customer`
 
 Query parameters: `page`, `pageSize`
 
-Response 200: Paginated list of complaint objects (each includes `canModify` flag).
+Response 200: Paginated list of complaint objects (each includes `canModify`, `exchangeOrderId`, and `staffNote` fields).
 
 ---
 
@@ -2075,7 +2107,7 @@ Roles allowed: Any authenticated user
 
 Path parameter `id`: GUID of the complaint.
 
-Response 200: Complaint object.
+Response 200: Complaint object (includes `exchangeOrderId` and `staffNote`).
 
 Response 403: Forbidden (if customer tries to access another user's complaint).
 
@@ -2127,24 +2159,61 @@ Response 400: `{ "errorCode": "VALIDATION_ERROR", "message": "Invalid status. Al
 
 ### PUT /api/Complaints/{id}/status
 
-Updates complaint status.
+Updates complaint status. Follows strict workflow transitions (see table above). An optional staff note can be included.
 
 Roles allowed: `staff`, `manager`, `admin`
 
 Request body:
 ```json
 {
-  "status": "string"
+  "status": "string",
+  "staffNote": "string"
 }
 ```
 
 Validation:
 - `status` is required
 - Must be one of: `pending`, `under_review`, `approved`, `rejected`, `in_progress`, `resolved`, `cancelled`
+- Must be a valid transition from the current status (see workflow table above)
+- `staffNote` is optional — used by staff to record resolution details or internal notes
 
-Response 200: Updated complaint object.
+Response 200: Updated complaint object (includes `staffNote`).
 
-Response 404: `{ "errorCode": "UPDATE_FAILED", "message": "Complaint not found" }`
+Response 400 (invalid status): `{ "errorCode": "VALIDATION_ERROR", "message": "Invalid status. Allowed: pending, under_review, approved, rejected, in_progress, resolved, cancelled" }`
+
+Response 400 (invalid transition): `{ "errorCode": "INVALID_TRANSITION", "message": "Cannot transition from 'pending' to 'resolved'. Check the allowed workflow transitions." }`
+
+Response 400 (update failed): `{ "errorCode": "UPDATE_FAILED", "message": "Failed to update complaint status" }`
+
+Response 404: `{ "errorCode": "COMPLAINT_NOT_FOUND", "message": "Complaint not found" }`
+
+---
+
+### PUT /api/Complaints/{id}/exchange-order
+
+Links an exchange-type complaint to a replacement order. This allows tracking which new order was created as a replacement for the original defective item.
+
+Roles allowed: `staff`, `manager`, `admin`
+
+Path parameter `id`: GUID of the complaint.
+
+Request body:
+```json
+{
+  "exchangeOrderId": "guid"
+}
+```
+
+Validation:
+- `exchangeOrderId` is required
+- The complaint must have `requestType` of `exchange`
+- The referenced order must exist
+
+Response 200: Updated complaint object with `exchangeOrderId` populated.
+
+Response 400: `{ "errorCode": "VALIDATION_ERROR", "message": "ExchangeOrderId is required" }`
+
+Response 404: `{ "errorCode": "LINK_FAILED", "message": "Complaint not found, is not an exchange type, or the exchange order does not exist" }`
 
 ---
 

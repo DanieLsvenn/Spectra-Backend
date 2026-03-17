@@ -23,13 +23,18 @@ namespace Services.GlassesService
         Task<PaginationResult<ComplaintRequest>> GetComplaintsByStatusAsync(string status, int currentPage = 1, int pageSize = 10);
 
         // Update operations
-        Task<ComplaintRequest?> UpdateComplaintStatusAsync(Guid requestId, string newStatus, string userRole);
+        Task<ComplaintRequest?> UpdateComplaintStatusAsync(Guid requestId, string newStatus, string userRole, string? staffNote = null);
         Task<ComplaintRequest?> UpdateComplaintAsync(Guid requestId, ComplaintRequest updatedComplaint, Guid userId);
+        Task<ComplaintRequest?> LinkExchangeOrderAsync(Guid requestId, Guid exchangeOrderId);
+        Task<ComplaintRequest?> ProcessRefundAsync(Guid requestId, double refundAmount);
+        Task<ComplaintRequest?> SetReturnTrackingAsync(Guid requestId, string trackingNumber);
 
         // Validation
         bool IsValidRequestType(string requestType);
         bool IsValidStatus(string status);
         bool CanCustomerModify(ComplaintRequest complaint);
+        Task<(bool IsValid, string? Error)> ValidateOrderItemOwnershipAsync(Guid orderItemId, Guid userId);
+        bool IsValidStatusTransition(string currentStatus, string newStatus);
     }
 
     public class ComplaintRequestService : IComplaintRequestService
@@ -37,6 +42,8 @@ namespace Services.GlassesService
         private readonly GenericRepository<ComplaintRequest> _complaintRepository;
         private readonly GenericRepository<OrderItem> _orderItemRepository;
         private readonly GenericRepository<Order> _orderRepository;
+        private readonly GenericRepository<Frame> _frameRepository;
+        private readonly GenericRepository<FrameMedium> _frameMediaRepository;
 
         // Request types
         public static class RequestType
@@ -86,14 +93,30 @@ namespace Services.GlassesService
             ComplaintStatus.Pending 
         };
 
+        // Valid status transitions
+        private static readonly Dictionary<string, string[]> ValidStatusTransitions = new()
+        {
+            { ComplaintStatus.Pending, new[] { ComplaintStatus.UnderReview, ComplaintStatus.Cancelled } },
+            { ComplaintStatus.UnderReview, new[] { ComplaintStatus.Approved, ComplaintStatus.Rejected } },
+            { ComplaintStatus.Approved, new[] { ComplaintStatus.InProgress, ComplaintStatus.Cancelled } },
+            { ComplaintStatus.Rejected, Array.Empty<string>() },
+            { ComplaintStatus.InProgress, new[] { ComplaintStatus.Resolved, ComplaintStatus.Cancelled } },
+            { ComplaintStatus.Resolved, Array.Empty<string>() },
+            { ComplaintStatus.Cancelled, Array.Empty<string>() }
+        };
+
         public ComplaintRequestService(
             GenericRepository<ComplaintRequest> complaintRepository,
             GenericRepository<OrderItem> orderItemRepository,
-            GenericRepository<Order> orderRepository)
+            GenericRepository<Order> orderRepository,
+            GenericRepository<Frame> frameRepository,
+            GenericRepository<FrameMedium> frameMediaRepository)
         {
             _complaintRepository = complaintRepository;
             _orderItemRepository = orderItemRepository;
             _orderRepository = orderRepository;
+            _frameRepository = frameRepository;
+            _frameMediaRepository = frameMediaRepository;
         }
 
         #region Create Operations
@@ -131,6 +154,20 @@ namespace Services.GlassesService
             {
                 var orders = await _orderRepository.SearchAsync(o => o.OrderId == complaint.OrderItem.OrderId);
                 complaint.OrderItem.Order = orders.FirstOrDefault();
+            }
+
+            // Load exchange order if linked
+            if (complaint?.ExchangeOrderId.HasValue == true)
+            {
+                var exchangeOrders = await _orderRepository.SearchAsync(o => o.OrderId == complaint.ExchangeOrderId);
+                complaint.ExchangeOrder = exchangeOrders.FirstOrDefault();
+            }
+
+            // Load Frame details for the order item
+            if (complaint?.OrderItem?.FrameId.HasValue == true)
+            {
+                var frames = await _frameRepository.SearchAsync(f => f.FrameId == complaint.OrderItem.FrameId);
+                complaint.OrderItem.Frame = frames.FirstOrDefault();
             }
 
             return complaint;
@@ -189,7 +226,7 @@ namespace Services.GlassesService
 
         #region Update Operations
 
-        public async Task<ComplaintRequest?> UpdateComplaintStatusAsync(Guid requestId, string newStatus, string userRole)
+        public async Task<ComplaintRequest?> UpdateComplaintStatusAsync(Guid requestId, string newStatus, string userRole, string? staffNote = null)
         {
             var complaint = await GetComplaintByIdAsync(requestId);
 
@@ -211,7 +248,20 @@ namespace Services.GlassesService
                 return null;
             }
 
+            // Enforce valid status transitions
+            var currentStatus = complaint.Status?.ToLower() ?? ComplaintStatus.Pending;
+            if (!IsValidStatusTransition(currentStatus, newStatus.ToLower()))
+            {
+                return null;
+            }
+
             complaint.Status = newStatus.ToLower();
+
+            if (!string.IsNullOrWhiteSpace(staffNote))
+            {
+                complaint.StaffNote = staffNote;
+            }
+
             return await _complaintRepository.UpdateAsync(complaint);
         }
 
@@ -249,6 +299,63 @@ namespace Services.GlassesService
             return await _complaintRepository.UpdateAsync(existingComplaint);
         }
 
+        public async Task<ComplaintRequest?> LinkExchangeOrderAsync(Guid requestId, Guid exchangeOrderId)
+        {
+            var complaint = await GetComplaintByIdAsync(requestId);
+
+            if (complaint == null)
+            {
+                return null;
+            }
+
+            // Only exchange-type complaints can be linked
+            if (complaint.RequestType?.ToLower() != RequestType.Exchange)
+            {
+                return null;
+            }
+
+            // Verify the exchange order exists
+            var orders = await _orderRepository.SearchAsync(o => o.OrderId == exchangeOrderId);
+            if (!orders.Any())
+            {
+                return null;
+            }
+
+            complaint.ExchangeOrderId = exchangeOrderId;
+            return await _complaintRepository.UpdateAsync(complaint);
+        }
+
+        public async Task<ComplaintRequest?> ProcessRefundAsync(Guid requestId, double refundAmount)
+        {
+            var complaint = await GetComplaintByIdAsync(requestId);
+            if (complaint == null) return null;
+
+            var allowedTypes = new[] { RequestType.Return, RequestType.Refund };
+            if (!allowedTypes.Contains(complaint.RequestType?.ToLower()))
+                return null;
+
+            var allowedStatuses = new[] { ComplaintStatus.Approved, ComplaintStatus.InProgress };
+            if (!allowedStatuses.Contains(complaint.Status?.ToLower()))
+                return null;
+
+            complaint.RefundAmount = refundAmount;
+            complaint.RefundedAt = TimeHelper.Now;
+            return await _complaintRepository.UpdateAsync(complaint);
+        }
+
+        public async Task<ComplaintRequest?> SetReturnTrackingAsync(Guid requestId, string trackingNumber)
+        {
+            var complaint = await GetComplaintByIdAsync(requestId);
+            if (complaint == null) return null;
+
+            var allowedTypes = new[] { RequestType.Return, RequestType.Exchange, RequestType.Warranty };
+            if (!allowedTypes.Contains(complaint.RequestType?.ToLower()))
+                return null;
+
+            complaint.ReturnTrackingNumber = trackingNumber;
+            return await _complaintRepository.UpdateAsync(complaint);
+        }
+
         #endregion
 
         #region Validation
@@ -271,6 +378,53 @@ namespace Services.GlassesService
             }
 
             return ModifiableStatuses.Contains(complaint.Status.ToLower());
+        }
+
+        public async Task<(bool IsValid, string? Error)> ValidateOrderItemOwnershipAsync(Guid orderItemId, Guid userId)
+        {
+            // Find the order item
+            var orderItems = await _orderItemRepository.SearchAsyncInclude(
+                oi => oi.OrderItemId == orderItemId,
+                oi => oi.Order);
+            var orderItem = orderItems.FirstOrDefault();
+
+            if (orderItem == null)
+            {
+                return (false, "Order item not found");
+            }
+
+            // Verify the order item belongs to the user's order
+            if (orderItem.Order == null)
+            {
+                return (false, "Order not found for this order item");
+            }
+
+            if (orderItem.Order.UserId != userId)
+            {
+                return (false, "This order item does not belong to your order");
+            }
+
+            // Verify the order is in a delivered status (customer must have received the item)
+            if (orderItem.Order.Status == null ||
+                !orderItem.Order.Status.Equals("delivered", StringComparison.OrdinalIgnoreCase))
+            {
+                return (false, "You can only file a complaint for delivered orders");
+            }
+
+            return (true, null);
+        }
+
+        public bool IsValidStatusTransition(string currentStatus, string newStatus)
+        {
+            currentStatus = currentStatus.ToLower();
+            newStatus = newStatus.ToLower();
+
+            if (!ValidStatusTransitions.ContainsKey(currentStatus))
+            {
+                return false;
+            }
+
+            return ValidStatusTransitions[currentStatus].Contains(newStatus);
         }
 
         #endregion

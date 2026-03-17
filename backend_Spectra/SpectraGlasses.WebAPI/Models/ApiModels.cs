@@ -375,12 +375,20 @@
     public class UpdateComplaintStatusRequest
     {
         public string Status { get; set; } = string.Empty;
+        public string? StaffNote { get; set; }
+    }
+
+    public class LinkExchangeOrderRequest
+    {
+        public Guid ExchangeOrderId { get; set; }
     }
 
     public class ComplaintResponse
     {
         public Guid RequestId { get; set; }
         public Guid? UserId { get; set; }
+        public string? UserName { get; set; }
+        public string? UserPhone { get; set; }
         public Guid? OrderItemId { get; set; }
         public string? RequestType { get; set; }
         public string? Reason { get; set; }
@@ -388,6 +396,39 @@
         public string? Status { get; set; }
         public DateTime? CreatedAt { get; set; }
         public bool CanModify { get; set; }
+        public Guid? ExchangeOrderId { get; set; }
+        public string? StaffNote { get; set; }
+        public double? RefundAmount { get; set; }
+        public string? ReturnTrackingNumber { get; set; }
+        public DateTime? RefundedAt { get; set; }
+        public OriginalOrderItemInfo? OriginalItem { get; set; }
+    }
+
+    public class OriginalOrderItemInfo
+    {
+        public Guid OrderItemId { get; set; }
+        public Guid? FrameId { get; set; }
+        public string? FrameName { get; set; }
+        public double? UnitPrice { get; set; }
+        public int? Quantity { get; set; }
+        public string? SelectedSize { get; set; }
+        public string? ImageUrl { get; set; }
+    }
+
+    public class ProcessRefundRequest
+    {
+        public double RefundAmount { get; set; }
+    }
+
+    public class SetReturnTrackingRequest
+    {
+        public string TrackingNumber { get; set; } = string.Empty;
+    }
+
+    public class CreateExchangeOrderFromComplaintRequest
+    {
+        public string ShippingAddress { get; set; } = string.Empty;
+        public List<CreateOrderItemRequest> Items { get; set; } = new();
     }
 
     #endregion
