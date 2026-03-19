@@ -257,6 +257,14 @@ namespace Services.GlassesService
             order.ShippingCarrier = carrier;
             order.ShippedAt = TimeHelper.Now;
 
+            // Calculate estimated delivery based on shipping method
+            var deliveryDays = (order.ShippingMethod?.ToLower()) switch
+            {
+                "express" => 3,
+                _ => 7
+            };
+            order.EstimatedDeliveryDate = TimeHelper.Now.AddDays(deliveryDays);
+
             if (order.Status?.ToLower() == "processing")
             {
                 order.Status = "shipped";

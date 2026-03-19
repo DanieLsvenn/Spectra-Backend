@@ -288,6 +288,8 @@ public partial class Context : DbContext
             entity.Property(e => e.StaffNote)
                 .HasMaxLength(500)
                 .HasColumnName("staffNote");
+            entity.Property(e => e.CancelledByCustomer)
+                .HasColumnName("cancelledByCustomer");
 
             entity.HasOne(d => d.OrderItem).WithMany(p => p.ComplaintRequests)
                 .HasForeignKey(d => d.OrderItemId)
@@ -484,9 +486,15 @@ public partial class Context : DbContext
             entity.Property(e => e.DeliveredAt)
                 .HasColumnType("datetime")
                 .HasColumnName("deliveredAt");
+            entity.Property(e => e.DeliveryConfirmedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("deliveryConfirmedAt");
             entity.Property(e => e.ShippingCarrier)
                 .HasMaxLength(50)
                 .HasColumnName("shippingCarrier");
+            entity.Property(e => e.EstimatedDeliveryDate)
+                .HasColumnType("datetime")
+                .HasColumnName("estimatedDeliveryDate");
             entity.Property(e => e.ConvertedFromPreorderId)
                 .HasColumnName("convertedFromPreorderId");
 

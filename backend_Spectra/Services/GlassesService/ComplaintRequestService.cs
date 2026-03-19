@@ -35,6 +35,7 @@ namespace Services.GlassesService
         bool CanCustomerModify(ComplaintRequest complaint);
         Task<(bool IsValid, string? Error)> ValidateOrderItemOwnershipAsync(Guid orderItemId, Guid userId);
         bool IsValidStatusTransition(string currentStatus, string newStatus);
+        Task<ComplaintRequest?> CancelComplaintByCustomerAsync(Guid requestId, Guid userId);
     }
 
     public class ComplaintRequestService : IComplaintRequestService
@@ -368,6 +369,23 @@ namespace Services.GlassesService
         public bool IsValidStatus(string status)
         {
             return ValidStatuses.Contains(status.ToLower());
+        }
+
+        public async Task<ComplaintRequest?> CancelComplaintByCustomerAsync(Guid requestId, Guid userId)
+        {
+            var complaint = await GetComplaintByIdAsync(requestId);
+            if (complaint == null) return null;
+
+            // Verify ownership
+            if (complaint.UserId != userId) return null;
+
+            // Customer can cancel when: pending, under_review, or approved
+            var cancellableStatuses = new[] { ComplaintStatus.Pending, ComplaintStatus.UnderReview, ComplaintStatus.Approved };
+            if (!cancellableStatuses.Contains(complaint.Status?.ToLower() ?? "")) return null;
+
+            complaint.Status = ComplaintStatus.Cancelled;
+            complaint.CancelledByCustomer = true;
+            return await _complaintRepository.UpdateAsync(complaint);
         }
 
         public bool CanCustomerModify(ComplaintRequest complaint)

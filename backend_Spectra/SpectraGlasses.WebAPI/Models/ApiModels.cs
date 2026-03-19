@@ -401,6 +401,7 @@
         public double? RefundAmount { get; set; }
         public string? ReturnTrackingNumber { get; set; }
         public DateTime? RefundedAt { get; set; }
+        public bool? CancelledByCustomer { get; set; }
         public OriginalOrderItemInfo? OriginalItem { get; set; }
     }
 

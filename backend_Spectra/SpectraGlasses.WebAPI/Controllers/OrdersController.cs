@@ -192,6 +192,42 @@ namespace SpectraGlasses.WebAPI.Controllers
             return Ok(order);
         }
 
+        /// <summary>
+        /// Customer confirms they have received the delivered order
+        /// </summary>
+        [HttpPut("{id:guid}/confirm-delivery")]
+        [Authorize(Roles = "customer")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ConfirmDelivery(Guid id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (userId == Guid.Empty)
+            {
+                return Unauthorized(new ErrorResponse
+                {
+                    ErrorCode = "UNAUTHORIZED",
+                    Message = "User not authenticated"
+                });
+            }
+
+            var result = await _orderService.ConfirmDeliveryAsync(id, userId);
+
+            if (result == null)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "CONFIRM_FAILED",
+                    Message = "Order not found, not delivered, or you are not the owner"
+                });
+            }
+
+            return Ok(new { message = "Delivery confirmed", deliveryConfirmedAt = result.DeliveryConfirmedAt });
+        }
+
         #endregion
 
         #region Staff/Manager Endpoints

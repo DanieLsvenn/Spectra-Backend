@@ -35,11 +35,15 @@ public partial class Order
 
     public Guid? ConvertedFromPreorderId { get; set; }
 
+    public DateTime? EstimatedDeliveryDate { get; set; }
+
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
     public virtual User User { get; set; }
+
+    public DateTime? DeliveryConfirmedAt { get; set; }
 
     public virtual Preorder ConvertedFromPreorder { get; set; }
 }

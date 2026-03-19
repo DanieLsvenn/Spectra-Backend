@@ -33,6 +33,7 @@ namespace Services.GlassesService
         Task<Order?> UpdateOrderStatusAsync(Guid orderId, string newStatus, string userRole, Guid userId);
         Task<Order?> UpdateOrderShippingAsync(Guid orderId, string shippingMethod, double shippingFee, double totalAmount);
         Task<bool> CanModifyOrderAsync(Guid orderId);
+        Task<Order?> ConfirmDeliveryAsync(Guid orderId, Guid userId);
 
         // Price calculation
         Task<double> CalculateOrderTotalAsync(List<OrderItem> orderItems);
@@ -617,10 +618,11 @@ namespace Services.GlassesService
 
             order.Status = newStatus;
 
-            // Set arrival date when delivered
+            // Set arrival/delivery dates when delivered
             if (newStatus == OrderStatus.Delivered)
             {
                 order.ArrivalDate = TimeHelper.Now;
+                order.DeliveredAt = TimeHelper.Now;
             }
 
             // Restore stock when order is cancelled
@@ -672,6 +674,29 @@ namespace Services.GlassesService
                 p.PaymentStatus != null && p.PaymentStatus.ToLower() == "completed");
 
             return !payments.Any();
+        }
+
+        public async Task<Order?> ConfirmDeliveryAsync(Guid orderId, Guid userId)
+        {
+            var order = await GetOrderByIdAsync(orderId);
+
+            if (order == null)
+                return null;
+
+            // Only the order owner can confirm delivery
+            if (order.UserId != userId)
+                return null;
+
+            // Only delivered orders can be confirmed
+            if (order.Status?.ToLower() != OrderStatus.Delivered)
+                return null;
+
+            // Already confirmed
+            if (order.DeliveryConfirmedAt.HasValue)
+                return order;
+
+            order.DeliveryConfirmedAt = TimeHelper.Now;
+            return await _orderRepository.UpdateAsync(order);
         }
 
         #endregion

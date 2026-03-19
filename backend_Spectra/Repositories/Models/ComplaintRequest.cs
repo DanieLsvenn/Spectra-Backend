@@ -33,6 +33,8 @@ public partial class ComplaintRequest
 
     public string StaffNote { get; set; }
 
+    public bool? CancelledByCustomer { get; set; }
+
     public virtual OrderItem OrderItem { get; set; }
 
     public virtual User User { get; set; }

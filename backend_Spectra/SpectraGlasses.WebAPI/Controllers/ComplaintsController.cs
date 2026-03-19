@@ -52,7 +52,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 StaffNote = complaint.StaffNote,
                 RefundAmount = complaint.RefundAmount,
                 ReturnTrackingNumber = complaint.ReturnTrackingNumber,
-                RefundedAt = complaint.RefundedAt
+                RefundedAt = complaint.RefundedAt,
+                CancelledByCustomer = complaint.CancelledByCustomer
             };
 
             if (complaint.OrderItem != null)
@@ -262,6 +263,41 @@ namespace SpectraGlasses.WebAPI.Controllers
                 {
                     ErrorCode = "UPDATE_FAILED",
                     Message = "Complaint not found, you don't have permission, or it can no longer be modified"
+                });
+            }
+
+            return Ok(MapToResponse(result));
+        }
+
+        /// <summary>
+        /// Customer cancels/withdraws their own complaint
+        /// </summary>
+        [HttpPut("{id:guid}/cancel")]
+        [Authorize(Roles = "customer")]
+        [ProducesResponseType(typeof(ComplaintResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> CancelComplaintByCustomer(Guid id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (userId == Guid.Empty)
+            {
+                return Unauthorized(new ErrorResponse
+                {
+                    ErrorCode = "UNAUTHORIZED",
+                    Message = "User not authenticated"
+                });
+            }
+
+            var result = await _complaintService.CancelComplaintByCustomerAsync(id, userId);
+
+            if (result == null)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "CANCEL_FAILED",
+                    Message = "Complaint not found, you are not the owner, or it cannot be cancelled at this stage"
                 });
             }
 
