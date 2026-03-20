@@ -228,6 +228,75 @@ namespace SpectraGlasses.WebAPI.Controllers
             return Ok(new { message = "Delivery confirmed", deliveryConfirmedAt = result.DeliveryConfirmedAt });
         }
 
+        /// <summary>
+        /// Customer cancels their own pending order
+        /// </summary>
+        [HttpPut("{id:guid}/cancel")]
+        [Authorize(Roles = "customer")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> CustomerCancelOrder(Guid id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (userId == Guid.Empty)
+            {
+                return Unauthorized(new ErrorResponse
+                {
+                    ErrorCode = "UNAUTHORIZED",
+                    Message = "User not authenticated"
+                });
+            }
+
+            // Get the order to verify ownership and status
+            var order = await _orderService.GetOrderByIdAsync(id);
+
+            if (order == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    ErrorCode = "ORDER_NOT_FOUND",
+                    Message = "Order not found"
+                });
+            }
+
+            // Verify the order belongs to this customer
+            if (order.UserId != userId)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "NOT_OWNER",
+                    Message = "You can only cancel your own orders"
+                });
+            }
+
+            // Only allow cancellation of pending orders
+            if (order.Status?.ToLower() != "pending")
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "INVALID_STATUS",
+                    Message = "Only pending orders can be cancelled. Please contact support for orders that have been confirmed."
+                });
+            }
+
+            // Update order status to cancelled
+            var result = await _orderService.CancelOrderByCustomerAsync(id, userId);
+
+            if (result == null)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "CANCEL_FAILED",
+                    Message = "Failed to cancel order. Please try again or contact support."
+                });
+            }
+
+            return Ok(new { message = "Order cancelled successfully", order = result });
+        }
+
         #endregion
 
         #region Staff/Manager Endpoints

@@ -45,5 +45,7 @@ public partial class Order
 
     public DateTime? DeliveryConfirmedAt { get; set; }
 
+    public bool? CancelledByCustomer { get; set; }
+
     public virtual Preorder ConvertedFromPreorder { get; set; }
 }

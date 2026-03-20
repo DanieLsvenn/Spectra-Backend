@@ -497,6 +497,8 @@ public partial class Context : DbContext
                 .HasColumnName("estimatedDeliveryDate");
             entity.Property(e => e.ConvertedFromPreorderId)
                 .HasColumnName("convertedFromPreorderId");
+            entity.Property(e => e.CancelledByCustomer)
+                .HasColumnName("cancelledByCustomer");
 
             entity.HasOne(d => d.ConvertedFromPreorder)
                 .WithMany()

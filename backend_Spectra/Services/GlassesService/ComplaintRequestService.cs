@@ -398,6 +398,9 @@ namespace Services.GlassesService
             return ModifiableStatuses.Contains(complaint.Status.ToLower());
         }
 
+        // Maximum number of days after delivery to file a complaint
+        private const int ComplaintWindowDays = 14;
+
         public async Task<(bool IsValid, string? Error)> ValidateOrderItemOwnershipAsync(Guid orderItemId, Guid userId)
         {
             // Find the order item
@@ -427,6 +430,17 @@ namespace Services.GlassesService
                 !orderItem.Order.Status.Equals("delivered", StringComparison.OrdinalIgnoreCase))
             {
                 return (false, "You can only file a complaint for delivered orders");
+            }
+
+            // Verify the complaint is within the allowed time window
+            var deliveredAt = orderItem.Order.DeliveryConfirmedAt ?? orderItem.Order.DeliveredAt ?? orderItem.Order.CreatedAt;
+            if (deliveredAt.HasValue)
+            {
+                var daysSinceDelivery = (TimeHelper.Now - deliveredAt.Value).TotalDays;
+                if (daysSinceDelivery > ComplaintWindowDays)
+                {
+                    return (false, $"Complaint window has expired. You can only file a complaint within {ComplaintWindowDays} days of delivery. It has been {Math.Floor(daysSinceDelivery)} days since delivery.");
+                }
             }
 
             return (true, null);

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Repositories.Models;
@@ -455,6 +456,219 @@ namespace SpectraGlasses.WebAPI.Controllers
             {
                 return null;
             }
+        }
+
+        // In-memory storage for password reset tokens (in production, use database or cache)
+        private static readonly Dictionary<string, (Guid UserId, DateTime Expiry)> _resetTokens = new();
+
+        /// <summary>
+        /// Initiates password reset process. In development, returns the reset token directly.
+        /// In production, this should send an email with the reset link.
+        /// </summary>
+        [HttpPost("forgot-password")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Email is required"
+                });
+            }
+
+            var user = await _userService.GetUserByEmailAsync(request.Email);
+
+            // Always return success even if user doesn't exist (security best practice)
+            if (user == null)
+            {
+                return Ok(new { message = "If an account with this email exists, a password reset link has been sent." });
+            }
+
+            // Generate reset token
+            var token = Guid.NewGuid().ToString("N");
+            var expiry = DateTime.UtcNow.AddHours(1);
+
+            // Store token (cleanup old tokens for this user first)
+            var oldTokens = _resetTokens.Where(t => t.Value.UserId == user.UserId).Select(t => t.Key).ToList();
+            foreach (var oldToken in oldTokens)
+            {
+                _resetTokens.Remove(oldToken);
+            }
+            _resetTokens[token] = (user.UserId, expiry);
+
+            // In development mode, return the token directly
+            // In production, you would send an email with the reset link
+            var isDevelopment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+            
+            if (isDevelopment)
+            {
+                return Ok(new 
+                { 
+                    message = "Password reset token generated (development mode)",
+                    token = token,
+                    expiresAt = expiry,
+                    note = "In production, this token would be sent via email"
+                });
+            }
+
+            // TODO: Send email with reset link in production
+            // await _emailService.SendPasswordResetEmail(user.Email, token);
+
+            return Ok(new { message = "If an account with this email exists, a password reset link has been sent." });
+        }
+
+        /// <summary>
+        /// Resets password using a valid reset token
+        /// </summary>
+        [HttpPost("reset-password")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Token))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Reset token is required"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "New password is required"
+                });
+            }
+
+            if (request.NewPassword.Length < 6)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Password must be at least 6 characters"
+                });
+            }
+
+            // Validate token
+            if (!_resetTokens.TryGetValue(request.Token, out var tokenData))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "INVALID_TOKEN",
+                    Message = "Invalid or expired reset token"
+                });
+            }
+
+            if (DateTime.UtcNow > tokenData.Expiry)
+            {
+                _resetTokens.Remove(request.Token);
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "TOKEN_EXPIRED",
+                    Message = "Reset token has expired. Please request a new one."
+                });
+            }
+
+            // Get user and update password
+            var user = await _userService.GetUserByIdAsync(tokenData.UserId);
+            if (user == null)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "USER_NOT_FOUND",
+                    Message = "User not found"
+                });
+            }
+
+            // Update password
+            user.PasswordHash = HashPassword(request.NewPassword);
+            await _userService.UpdateUserAsync(user.UserId, user);
+
+            // Remove used token
+            _resetTokens.Remove(request.Token);
+
+            return Ok(new { message = "Password has been reset successfully. You can now login with your new password." });
+        }
+
+        /// <summary>
+        /// Changes password for authenticated user
+        /// </summary>
+        [HttpPut("change-password")]
+        [Authorize]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+            {
+                return Unauthorized(new ErrorResponse
+                {
+                    ErrorCode = "UNAUTHORIZED",
+                    Message = "User not authenticated"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Current password is required"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "New password is required"
+                });
+            }
+
+            if (request.NewPassword.Length < 6)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "New password must be at least 6 characters"
+                });
+            }
+
+            var user = await _userService.GetUserByIdAsync(userId);
+            if (user == null)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "USER_NOT_FOUND",
+                    Message = "User not found"
+                });
+            }
+
+            // Verify current password
+            var currentPasswordHash = HashPassword(request.CurrentPassword);
+            if (user.PasswordHash != currentPasswordHash && user.PasswordHash != request.CurrentPassword)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "INVALID_PASSWORD",
+                    Message = "Current password is incorrect"
+                });
+            }
+
+            // Update password
+            user.PasswordHash = HashPassword(request.NewPassword);
+            await _userService.UpdateUserAsync(user.UserId, user);
+
+            return Ok(new { message = "Password changed successfully" });
         }
 
         #endregion

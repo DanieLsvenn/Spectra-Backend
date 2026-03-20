@@ -12,6 +12,9 @@ namespace Services.GlassesService
         public int TotalOrders { get; set; }
         public double TotalRevenue { get; set; }
         public int TotalCustomers { get; set; }
+        public int TotalFramesSold { get; set; }
+        public int NewCustomers { get; set; }
+        public int TotalProducts { get; set; }
         public int PendingOrders { get; set; }
         public int ConfirmedOrders { get; set; }
         public int ProcessingOrders { get; set; }
@@ -149,11 +152,33 @@ namespace Services.GlassesService
             var totalRevenue = completedPayments.Sum(p => p.Amount ?? 0);
             var totalOrders = orderList.Count;
 
+            // Calculate total frames sold from delivered orders
+            var deliveredOrders = orderList.Where(o => "delivered".Equals(o.Status, StringComparison.OrdinalIgnoreCase)).ToList();
+            var allOrderItems = await _orderItemRepository.GetAllAsync();
+            var deliveredOrderIds = deliveredOrders.Select(o => o.OrderId).ToHashSet();
+            var totalFramesSold = allOrderItems
+                .Where(oi => oi.OrderId.HasValue && deliveredOrderIds.Contains(oi.OrderId.Value))
+                .Sum(oi => oi.Quantity ?? 0);
+
+            // New customers: created within last 30 days
+            var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+            var allCustomers = (await _userRepository.GetAllAsync())
+                .Where(u => u.Role != null && u.Role.Equals("customer", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var newCustomers = allCustomers.Count(u => u.CreatedAt >= thirtyDaysAgo);
+
+            // Total products (frame variants)
+            var allFrames = await _frameRepository.GetAllAsync();
+            var totalProducts = allFrames.Count();
+
             return new DashboardStatistics
             {
                 TotalOrders = totalOrders,
                 TotalRevenue = totalRevenue,
                 TotalCustomers = customers.Count,
+                TotalFramesSold = totalFramesSold,
+                NewCustomers = newCustomers,
+                TotalProducts = totalProducts,
                 PendingOrders = orderList.Count(o => "pending".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
                 ConfirmedOrders = orderList.Count(o => "confirmed".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),
                 ProcessingOrders = orderList.Count(o => "processing".Equals(o.Status, StringComparison.OrdinalIgnoreCase)),

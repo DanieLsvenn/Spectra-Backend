@@ -13,13 +13,16 @@ namespace SpectraGlasses.WebAPI.Controllers
     {
         private readonly IComplaintRequestService _complaintService;
         private readonly IOrderService _orderService;
+        private readonly ICloudinaryService _cloudinaryService;
 
         public ComplaintsController(
             IComplaintRequestService complaintService,
-            IOrderService orderService)
+            IOrderService orderService,
+            ICloudinaryService cloudinaryService)
         {
             _complaintService = complaintService;
             _orderService = orderService;
+            _cloudinaryService = cloudinaryService;
         }
 
         private Guid GetCurrentUserId()
@@ -142,6 +145,67 @@ namespace SpectraGlasses.WebAPI.Controllers
                 new { id = createdComplaint.RequestId },
                 MapToResponse(createdComplaint)
             );
+        }
+
+        /// <summary>
+        /// Uploads an image for a complaint to Cloudinary (Customer only)
+        /// Returns the URL that can be used as mediaUrl when creating/updating a complaint
+        /// </summary>
+        [HttpPost("upload-image")]
+        [Authorize(Roles = "customer")]
+        [ProducesResponseType(typeof(ImageUploadResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> UploadComplaintImage(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "No file provided"
+                });
+            }
+
+            const long maxFileSize = 10 * 1024 * 1024;
+            if (file.Length > maxFileSize)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "File size exceeds maximum allowed size of 10MB"
+                });
+            }
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "VALIDATION_ERROR",
+                    Message = "Invalid file type. Allowed: jpg, jpeg, png, gif, webp"
+                });
+            }
+
+            using var stream = file.OpenReadStream();
+            var uploadResult = await _cloudinaryService.UploadImageAsync(stream, file.FileName, "spectra/complaints");
+
+            if (!uploadResult.Success)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "UPLOAD_ERROR",
+                    Message = uploadResult.Error
+                });
+            }
+
+            return Ok(new ImageUploadResponse
+            {
+                Success = true,
+                Url = uploadResult.Url,
+                PublicId = uploadResult.PublicId
+            });
         }
 
         /// <summary>

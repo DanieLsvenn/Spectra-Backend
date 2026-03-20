@@ -221,13 +221,16 @@ EXEC #AlterToNvarchar 'SHAPE', 'status', 50, 0;
 
 PRINT 'FRAME_SIZE';
 EXEC #AlterToNvarchar 'FRAME_SIZE', 'size', 50, 0;
-EXEC #AlterToNvarchar 'FRAME_SIZE', 'isDefault', 50, 0;
+-- NOTE: isDefault is BIT, NOT a text column. Do NOT convert it.
+-- EXEC #AlterToNvarchar 'FRAME_SIZE', 'isDefault', 50, 0;  -- REMOVED: was corrupting BIT column
 
 PRINT 'LENS_INDEX';
 EXEC #AlterToNvarchar 'LENS_INDEX', 'name', 100, 0;
 EXEC #AlterToNvarchar 'LENS_INDEX', 'description', 500, 0;
-EXEC #AlterToNvarchar 'LENS_INDEX', 'additionalPrice', 500, 0;
-EXEC #AlterToNvarchar 'LENS_INDEX', 'minPrescription', 500, 0;
+-- NOTE: additionalPrice is FLOAT, NOT a text column. Do NOT convert it.
+-- EXEC #AlterToNvarchar 'LENS_INDEX', 'additionalPrice', 500, 0;  -- REMOVED: was corrupting FLOAT column
+-- NOTE: minPrescription is FLOAT, NOT a text column. Do NOT convert it.
+-- EXEC #AlterToNvarchar 'LENS_INDEX', 'minPrescription', 500, 0;  -- REMOVED: was corrupting FLOAT column
 EXEC #AlterToNvarchar 'LENS_INDEX', 'status', 50, 0;
 
 PRINT 'COMPLAINT_REQUEST';

@@ -34,6 +34,7 @@ namespace Services.GlassesService
         Task<Order?> UpdateOrderShippingAsync(Guid orderId, string shippingMethod, double shippingFee, double totalAmount);
         Task<bool> CanModifyOrderAsync(Guid orderId);
         Task<Order?> ConfirmDeliveryAsync(Guid orderId, Guid userId);
+        Task<Order?> CancelOrderByCustomerAsync(Guid orderId, Guid userId);
 
         // Price calculation
         Task<double> CalculateOrderTotalAsync(List<OrderItem> orderItems);
@@ -696,6 +697,49 @@ namespace Services.GlassesService
                 return order;
 
             order.DeliveryConfirmedAt = TimeHelper.Now;
+            return await _orderRepository.UpdateAsync(order);
+        }
+
+        public async Task<Order?> CancelOrderByCustomerAsync(Guid orderId, Guid userId)
+        {
+            var order = await GetOrderByIdAsync(orderId);
+
+            if (order == null)
+                return null;
+
+            // Only the order owner can cancel
+            if (order.UserId != userId)
+                return null;
+
+            // Only pending orders can be cancelled by customers
+            if (order.Status?.ToLower() != OrderStatus.Pending)
+                return null;
+
+            // Restore stock for each order item
+            var orderWithDetails = await GetOrderByIdWithDetailsAsync(orderId);
+            if (orderWithDetails?.OrderItems != null)
+            {
+                foreach (var item in orderWithDetails.OrderItems)
+                {
+                    if (item.SelectedColorId.HasValue && item.Quantity.HasValue)
+                    {
+                        var frameColors = await _frameColorRepository.SearchAsync(
+                            fc => fc.ColorId == item.SelectedColorId && fc.FrameId == item.FrameId);
+                        var frameColor = frameColors.FirstOrDefault();
+
+                        if (frameColor != null)
+                        {
+                            frameColor.StockQuantity = (frameColor.StockQuantity ?? 0) + item.Quantity.Value;
+                            await _frameColorRepository.UpdateAsync(frameColor);
+                        }
+                    }
+                }
+            }
+
+            // Update order status to cancelled
+            order.Status = OrderStatus.Cancelled;
+            order.CancelledByCustomer = true;
+
             return await _orderRepository.UpdateAsync(order);
         }
 
