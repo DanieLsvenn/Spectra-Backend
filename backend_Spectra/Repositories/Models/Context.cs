@@ -281,6 +281,9 @@ public partial class Context : DbContext
             entity.Property(e => e.ReturnTrackingNumber)
                 .HasMaxLength(100)
                 .HasColumnName("returnTrackingNumber");
+            entity.Property(e => e.ReturnShippingCarrier)
+                .HasMaxLength(100)
+                .HasColumnName("returnShippingCarrier");
             entity.Property(e => e.RefundedAt)
                 .HasColumnType("datetime")
                 .HasColumnName("refundedAt");

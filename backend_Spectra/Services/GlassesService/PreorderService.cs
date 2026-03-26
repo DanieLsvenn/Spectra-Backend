@@ -58,6 +58,16 @@ namespace Services.GlassesService
             public const string Cancelled = "cancelled";
         }
 
+        // Valid preorder status transitions (mirrors Order pattern)
+        private static readonly Dictionary<string, string[]> ValidPreorderStatusTransitions = new()
+        {
+            { PreorderStatus.Pending, new[] { PreorderStatus.Confirmed, PreorderStatus.Cancelled } },
+            { PreorderStatus.Confirmed, new[] { PreorderStatus.Paid, PreorderStatus.Cancelled } },
+            { PreorderStatus.Paid, new[] { PreorderStatus.ConvertedToOrder, PreorderStatus.Cancelled } },
+            { PreorderStatus.ConvertedToOrder, Array.Empty<string>() },
+            { PreorderStatus.Cancelled, Array.Empty<string>() }
+        };
+
         public PreorderService(
             GenericRepository<Preorder> preorderRepository,
             GenericRepository<PreorderItem> preorderItemRepository,
@@ -394,7 +404,19 @@ namespace Services.GlassesService
                 return null;
             }
 
-            preorder.Status = newStatus.ToLower();
+            var currentStatus = preorder.Status?.ToLower() ?? PreorderStatus.Pending;
+            var targetStatus = newStatus.ToLower();
+
+            // Validate status transition
+            if (!ValidPreorderStatusTransitions.TryGetValue(currentStatus, out var allowedTransitions)
+                || !allowedTransitions.Contains(targetStatus))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot transition preorder from '{currentStatus}' to '{targetStatus}'. " +
+                    $"Allowed transitions: {(allowedTransitions != null ? string.Join(", ", allowedTransitions) : "none")}");
+            }
+
+            preorder.Status = targetStatus;
             return await _preorderRepository.UpdateAsync(preorder);
         }
 
@@ -437,9 +459,16 @@ namespace Services.GlassesService
                 return false;
             }
 
-            // Must be in paid or confirmed status
+            // Must be in paid or confirmed status (not already converted or cancelled)
             var convertibleStatuses = new[] { PreorderStatus.Paid, PreorderStatus.Confirmed };
             if (!convertibleStatuses.Contains(preorder.Status?.ToLower()))
+            {
+                return false;
+            }
+
+            // Guard against duplicate conversion — check if an order already exists for this preorder
+            var existingOrders = await _orderRepository.SearchAsync(o => o.ConvertedFromPreorderId == preorderId);
+            if (existingOrders.Any())
             {
                 return false;
             }

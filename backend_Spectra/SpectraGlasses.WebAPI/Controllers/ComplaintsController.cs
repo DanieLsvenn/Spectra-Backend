@@ -55,6 +55,7 @@ namespace SpectraGlasses.WebAPI.Controllers
                 StaffNote = complaint.StaffNote,
                 RefundAmount = complaint.RefundAmount,
                 ReturnTrackingNumber = complaint.ReturnTrackingNumber,
+                ReturnShippingCarrier = complaint.ReturnShippingCarrier,
                 RefundedAt = complaint.RefundedAt,
                 CancelledByCustomer = complaint.CancelledByCustomer
             };
@@ -490,6 +491,23 @@ namespace SpectraGlasses.WebAPI.Controllers
                     ErrorCode = "INVALID_TRANSITION",
                     Message = $"Cannot transition from '{currentStatus}' to '{request.Status}'. Check the allowed workflow transitions."
                 });
+            }
+
+            // Block resolving exchange complaints if exchange order is not yet delivered
+            if (request.Status.ToLower() == "resolved"
+                && existing.RequestType?.ToLower() == "exchange"
+                && existing.ExchangeOrderId.HasValue)
+            {
+                var detailedComplaint = await _complaintService.GetComplaintByIdWithDetailsAsync(id);
+                var exchangeOrder = detailedComplaint?.ExchangeOrder;
+                if (exchangeOrder == null || exchangeOrder.Status?.ToLower() != "delivered")
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        ErrorCode = "EXCHANGE_NOT_DELIVERED",
+                        Message = "Cannot resolve this exchange complaint until the replacement order has been delivered to the customer."
+                    });
+                }
             }
 
             var result = await _complaintService.UpdateComplaintStatusAsync(id, request.Status, userRole, request.StaffNote);

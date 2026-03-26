@@ -122,6 +122,7 @@ builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IProductReviewService, ProductReviewService>();
 builder.Services.AddScoped<IPreorderCampaignService, PreorderCampaignService>();
 builder.Services.AddScoped<IShippingService, ShippingService>();
+builder.Services.AddSingleton<IExchangeRateService, ExchangeRateService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");

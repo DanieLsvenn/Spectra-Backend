@@ -127,10 +127,11 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             var createdPreorder = await _preorderService.CreatePreorderAsync(preorder, preorderItems);
 
-            // Increment campaign slot count if campaign-linked
+            // Increment campaign slot count by total quantity if campaign-linked
             if (request.CampaignId.HasValue)
             {
-                await _campaignService.IncrementCampaignSlotsAsync(request.CampaignId.Value);
+                int totalQuantity = preorderItems.Sum(i => i.Quantity ?? 1);
+                await _campaignService.IncrementCampaignSlotsAsync(request.CampaignId.Value, totalQuantity);
             }
 
             return CreatedAtAction(nameof(GetPreorderById), new { id = createdPreorder.PreorderId }, createdPreorder);
@@ -297,18 +298,29 @@ namespace SpectraGlasses.WebAPI.Controllers
                 });
             }
 
-            var result = await _preorderService.UpdatePreorderStatusAsync(id, request.Status, userRole);
-
-            if (result == null)
+            try
             {
-                return NotFound(new ErrorResponse
+                var result = await _preorderService.UpdatePreorderStatusAsync(id, request.Status, userRole);
+
+                if (result == null)
                 {
-                    ErrorCode = "UPDATE_FAILED",
-                    Message = "Preorder not found or status update not allowed"
+                    return NotFound(new ErrorResponse
+                    {
+                        ErrorCode = "UPDATE_FAILED",
+                        Message = "Preorder not found or status update not allowed"
+                    });
+                }
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "INVALID_STATUS_TRANSITION",
+                    Message = ex.Message
                 });
             }
-
-            return Ok(result);
         }
 
         /// <summary>

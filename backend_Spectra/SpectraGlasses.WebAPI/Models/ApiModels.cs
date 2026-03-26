@@ -198,6 +198,7 @@
     {
         public string ShippingAddress { get; set; } = string.Empty;
         public string? ShippingMethod { get; set; }
+        public string? Notes { get; set; }
         public List<CreateOrderItemRequest> Items { get; set; } = new();
     }
 
@@ -417,6 +418,7 @@
         public string? StaffNote { get; set; }
         public double? RefundAmount { get; set; }
         public string? ReturnTrackingNumber { get; set; }
+        public string? ReturnShippingCarrier { get; set; }
         public DateTime? RefundedAt { get; set; }
         public bool? CancelledByCustomer { get; set; }
         public OriginalOrderItemInfo? OriginalItem { get; set; }
@@ -706,6 +708,7 @@
     {
         public string ShippingMethod { get; set; } = "standard";
         public double OrderSubtotal { get; set; }
+        public string? ShippingAddress { get; set; }
     }
 
     public class AssignTrackingRequest
@@ -745,6 +748,7 @@
     {
         public string RateId { get; set; } = string.Empty;
         public Guid? OrderId { get; set; }
+        public Guid? ComplaintId { get; set; }
         public Services.GlassesService.GoShipAddress AddressFrom { get; set; } = new();
         public Services.GlassesService.GoShipAddress AddressTo { get; set; } = new();
         public Services.GlassesService.GoShipParcel Parcel { get; set; } = new();

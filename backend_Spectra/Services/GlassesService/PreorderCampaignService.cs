@@ -34,7 +34,7 @@ namespace Services.GlassesService
         Task<PreorderCampaign?> UpdateCampaignAsync(Guid campaignId, PreorderCampaign updates);
         Task<bool> EndCampaignAsync(Guid campaignId);
         Task<bool> ValidatePreorderAgainstCampaignAsync(Guid campaignId, List<PreorderItem> items);
-        Task<bool> IncrementCampaignSlotsAsync(Guid campaignId);
+        Task<bool> IncrementCampaignSlotsAsync(Guid campaignId, int quantity);
         /// <summary>
         /// Returns the set of FrameIds that belong to upcoming (not yet started) campaigns.
         /// </summary>
@@ -228,7 +228,10 @@ namespace Services.GlassesService
             if (campaign.StartDate > now || campaign.EndDate < now)
                 return false;
 
-            if (campaign.MaxSlots.HasValue && campaign.CurrentSlots >= campaign.MaxSlots.Value)
+            // Calculate total quantity across all items
+            int totalQuantity = items.Sum(i => i.Quantity ?? 1);
+
+            if (campaign.MaxSlots.HasValue && (campaign.CurrentSlots + totalQuantity) > campaign.MaxSlots.Value)
                 return false;
 
             var campaignFrameIds = campaign.CampaignFrames.Select(cf => cf.FrameId).ToHashSet();
@@ -245,13 +248,13 @@ namespace Services.GlassesService
             return true;
         }
 
-        public async Task<bool> IncrementCampaignSlotsAsync(Guid campaignId)
+        public async Task<bool> IncrementCampaignSlotsAsync(Guid campaignId, int quantity)
         {
             var campaigns = await _campaignRepository.SearchAsync(c => c.CampaignId == campaignId);
             var campaign = campaigns.FirstOrDefault();
             if (campaign == null) return false;
 
-            campaign.CurrentSlots++;
+            campaign.CurrentSlots += quantity;
             if (campaign.Status == "upcoming")
                 campaign.Status = "active";
 

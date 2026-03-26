@@ -67,6 +67,7 @@ namespace Services.GlassesService
         private readonly GenericRepository<Order> _orderRepository;
         private readonly GenericRepository<Preorder> _preorderRepository;
         private readonly IConfiguration _configuration;
+        private readonly IExchangeRateService _exchangeRateService;
 
         // Payment statuses
         public static class PaymentStatus
@@ -91,12 +92,14 @@ namespace Services.GlassesService
             GenericRepository<Payment> paymentRepository,
             GenericRepository<Order> orderRepository,
             GenericRepository<Preorder> preorderRepository,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IExchangeRateService exchangeRateService)
         {
             _paymentRepository = paymentRepository;
             _orderRepository = orderRepository;
             _preorderRepository = preorderRepository;
             _configuration = configuration;
+            _exchangeRateService = exchangeRateService;
         }
 
         #region Create Operations
@@ -328,9 +331,8 @@ namespace Services.GlassesService
                 var vnp_Url = vnpayConfig["PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
                 var vnp_Version = vnpayConfig["Version"] ?? "2.1.0";
 
-                // Convert USD to VND (VNPay only accepts VND)
-                // Default rate: 1 USD = 25,000 VND (configurable in appsettings.json)
-                var usdToVndRate = double.TryParse(vnpayConfig["UsdToVndRate"], out var rate) ? rate : 25000;
+                // Convert USD to VND using live exchange rate (VNPay only accepts VND)
+                var usdToVndRate = _exchangeRateService.GetUsdToVndRateAsync().GetAwaiter().GetResult();
                 var amountInVnd = request.Amount * usdToVndRate;
                 
                 // VNPay requires amount in VND * 100 (no decimal)

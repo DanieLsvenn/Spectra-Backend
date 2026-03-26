@@ -47,5 +47,7 @@ public partial class Order
 
     public bool? CancelledByCustomer { get; set; }
 
+    public string Notes { get; set; }
+
     public virtual Preorder ConvertedFromPreorder { get; set; }
 }

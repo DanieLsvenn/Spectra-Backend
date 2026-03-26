@@ -256,6 +256,34 @@ namespace Services.GlassesService
                 return null;
             }
 
+            // For exchange complaints: block "resolved" unless exchange order is delivered
+            if (newStatus.ToLower() == ComplaintStatus.Resolved
+                && complaint.RequestType?.ToLower() == "exchange"
+                && complaint.ExchangeOrderId.HasValue)
+            {
+                var exchangeOrders = await _orderRepository.SearchAsync(o => o.OrderId == complaint.ExchangeOrderId);
+                var exchangeOrder = exchangeOrders.FirstOrDefault();
+                if (exchangeOrder == null || exchangeOrder.Status?.ToLower() != "delivered")
+                {
+                    // Cannot resolve until the exchange order has been delivered to customer
+                    return null;
+                }
+            }
+
+            // For return/warranty complaints: block "resolved" unless return tracking has been assigned
+            if (newStatus.ToLower() == ComplaintStatus.Resolved)
+            {
+                var reqType = complaint.RequestType?.ToLower();
+                if (reqType == RequestType.Return || reqType == RequestType.Warranty)
+                {
+                    if (string.IsNullOrWhiteSpace(complaint.ReturnTrackingNumber))
+                    {
+                        // Cannot resolve until the return/warranty shipment tracking is assigned
+                        return null;
+                    }
+                }
+            }
+
             complaint.Status = newStatus.ToLower();
 
             if (!string.IsNullOrWhiteSpace(staffNote))

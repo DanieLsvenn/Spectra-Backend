@@ -103,14 +103,15 @@ namespace SpectraGlasses.WebAPI.Controllers
             {
                 UserId = userId,
                 ShippingAddress = request.ShippingAddress,
-                ShippingMethod = request.ShippingMethod ?? "standard"
+                ShippingMethod = request.ShippingMethod ?? "standard",
+                Notes = request.Notes
             };
 
             var createdOrder = await _orderService.CreateOrderAsync(order, orderItems);
 
-            // Calculate and apply shipping fee, then persist
+            // Calculate and apply shipping fee (zone-based for express), then persist
             var shippingFee = _shippingService.CalculateShippingFee(
-                createdOrder.ShippingMethod, createdOrder.TotalAmount ?? 0);
+                createdOrder.ShippingMethod, createdOrder.TotalAmount ?? 0, createdOrder.ShippingAddress);
             createdOrder.ShippingFee = shippingFee;
             createdOrder.TotalAmount = (createdOrder.TotalAmount ?? 0) + shippingFee;
             await _orderService.UpdateOrderShippingAsync(createdOrder.OrderId, createdOrder.ShippingMethod, shippingFee, createdOrder.TotalAmount ?? 0);

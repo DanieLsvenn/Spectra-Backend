@@ -27,6 +27,8 @@ public partial class ComplaintRequest
 
     public string ReturnTrackingNumber { get; set; }
 
+    public string ReturnShippingCarrier { get; set; }
+
     public DateTime? RefundedAt { get; set; }
 
     public Guid? ExchangeOrderId { get; set; }
