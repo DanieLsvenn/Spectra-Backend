@@ -452,6 +452,14 @@ namespace Services.GlassesService
                 }
                 if (order.User != null) order.User.Orders = null;
             }
+
+            // Detach everything from the change tracker after enrichment.
+            // The null assignments above (item.Order = null, user.Orders = null, etc.)
+            // are for JSON serialization only. If these entities stay tracked, the next
+            // SaveChangesAsync() anywhere in the request will flush those nulls to the DB,
+            // wiping out OrderItem.OrderId and Order.UserId. Clearing the tracker ensures
+            // these read-only DTOs cannot corrupt the database.
+            _orderRepository.ClearTracker();
         }
 
         // ================================================================
