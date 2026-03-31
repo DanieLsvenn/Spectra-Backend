@@ -9,11 +9,6 @@ namespace Repositories.Basic
     {
         private readonly Context _context;
 
-        public GenericRepository()
-        {
-            _context ??= new Context();
-        }
-
         public GenericRepository(Context context)
         {
             _context = context;
@@ -143,6 +138,26 @@ namespace Repositories.Basic
             _context.Remove(entity);
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        /// <summary>
+        /// Saves all pending tracked changes without clearing/reattaching entities.
+        /// Use after modifying tracked entities loaded via SearchAsync to update only changed columns.
+        /// </summary>
+        public async Task SaveAsync()
+        {
+            await _context.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Detaches all tracked entities from the change tracker.
+        /// Call this before inserting new entities to prevent EF Core relationship fixup
+        /// from interfering with the insert (e.g., when catalog entities like Frame are
+        /// already tracked and would otherwise be linked to the new entity).
+        /// </summary>
+        public void ClearTracker()
+        {
+            _context.ChangeTracker.Clear();
         }
 
         public T? GetById<TKey>(TKey id)

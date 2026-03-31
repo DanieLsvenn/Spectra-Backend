@@ -127,6 +127,7 @@
     {
         public Guid ColorId { get; set; }
         public int StockQuantity { get; set; }
+        public double ColorExtraCost { get; set; }
     }
 
     public class FrameValidationResult
@@ -717,41 +718,108 @@
         public string Carrier { get; set; } = string.Empty;
     }
 
-    public class GoShipAddressApiModel
+    /// <summary>
+    /// Request model for estimating Ahamove delivery fees.
+    /// Warehouse (pickup) is configured server-side; only destination needed.
+    /// </summary>
+    public class AhamoveEstimateApiRequest
     {
-        public string Name { get; set; } = string.Empty;
-        public string Phone { get; set; } = string.Empty;
-        public string Street { get; set; } = string.Empty;
-        public string Ward { get; set; } = string.Empty;
-        public string District { get; set; } = string.Empty;
-        public string City { get; set; } = string.Empty;
+        public double DestinationLat { get; set; }
+        public double DestinationLng { get; set; }
+        public string? DestinationAddress { get; set; }
+        public string? RecipientName { get; set; }
+        public string? RecipientPhone { get; set; }
+        public int? Cod { get; set; }
+        public long? ItemValue { get; set; }
+        public string? PaymentMethod { get; set; }
+        public List<Services.GlassesService.AhamoveGroupServiceRequest>? GroupServices { get; set; }
+        public List<Services.GlassesService.AhamoveItem>? Items { get; set; }
+        public List<Services.GlassesService.AhamovePackageDetail>? PackageDetail { get; set; }
     }
 
-    public class GoShipParcelApiModel
+    /// <summary>
+    /// Request model for creating an Ahamove delivery order.
+    /// </summary>
+    public class CreateAhamoveOrderApiRequest
     {
-        public int Cod { get; set; }
-        public int Weight { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
-        public int Length { get; set; }
-        public string Metadata { get; set; } = string.Empty;
-    }
-
-    public class GoShipRateApiRequest
-    {
-        public Services.GlassesService.GoShipAddress AddressFrom { get; set; } = new();
-        public Services.GlassesService.GoShipAddress AddressTo { get; set; } = new();
-        public Services.GlassesService.GoShipParcel Parcel { get; set; } = new();
-    }
-
-    public class CreateGoShipShipmentApiRequest
-    {
-        public string RateId { get; set; } = string.Empty;
+        public string GroupServiceId { get; set; } = string.Empty;
         public Guid? OrderId { get; set; }
         public Guid? ComplaintId { get; set; }
-        public Services.GlassesService.GoShipAddress AddressFrom { get; set; } = new();
-        public Services.GlassesService.GoShipAddress AddressTo { get; set; } = new();
-        public Services.GlassesService.GoShipParcel Parcel { get; set; } = new();
+        public double DestinationLat { get; set; }
+        public double DestinationLng { get; set; }
+        public string? DestinationAddress { get; set; }
+        public string? RecipientName { get; set; }
+        public string? RecipientPhone { get; set; }
+        public string? Remarks { get; set; }
+        public int? Cod { get; set; }
+        public long? ItemValue { get; set; }
+        public string? PaymentMethod { get; set; }
+        public List<Services.GlassesService.AhamoveItem>? Items { get; set; }
+        public List<Services.GlassesService.AhamovePackageDetail>? PackageDetail { get; set; }
+    }
+
+    // ── GHN (Giao Hàng Nhanh) API Models ──
+
+    /// <summary>
+    /// Request model for getting GHN available shipping services
+    /// </summary>
+    public class GhnServicesApiRequest
+    {
+        public int ToDistrictId { get; set; }
+    }
+
+    /// <summary>
+    /// Request model for calculating GHN shipping fee
+    /// </summary>
+    public class GhnCalculateFeeApiRequest
+    {
+        public int ServiceId { get; set; }
+        public int ServiceTypeId { get; set; } = 2; // 2 = Standard, 5 = Express
+        public int ToDistrictId { get; set; }
+        public string ToWardCode { get; set; } = string.Empty;
+        public int InsuranceValue { get; set; }
+        public int Weight { get; set; } = 200; // grams
+        public int Length { get; set; } = 15;
+        public int Width { get; set; } = 10;
+        public int Height { get; set; } = 10;
+    }
+
+    /// <summary>
+    /// Request model for creating a GHN shipping order
+    /// </summary>
+    public class GhnCreateOrderApiRequest
+    {
+        public Guid? OrderId { get; set; }
+        public Guid? ComplaintId { get; set; }
+        public int ServiceId { get; set; }
+        public int ServiceTypeId { get; set; } = 2;
+        public string ToName { get; set; } = string.Empty;
+        public string ToPhone { get; set; } = string.Empty;
+        public string ToAddress { get; set; } = string.Empty;
+        public string ToWardCode { get; set; } = string.Empty;
+        public int ToDistrictId { get; set; }
+        public int CodAmount { get; set; }
+        public int InsuranceValue { get; set; }
+        public int Weight { get; set; } = 200;
+        public int Length { get; set; } = 15;
+        public int Width { get; set; } = 10;
+        public int Height { get; set; } = 10;
+        public string? Note { get; set; }
+        public string? Content { get; set; }
+        public string RequiredNote { get; set; } = "CHOTHUHANG";
+        public List<Services.GlassesService.GhnOrderItem>? Items { get; set; }
+    }
+
+    /// <summary>
+    /// Request model for switching GHN order status (sandbox only)
+    /// </summary>
+    public class GhnSwitchStatusRequest
+    {
+        /// <summary>
+        /// Target status. Valid values: ready_to_pick, picking, picked, storing, transporting, 
+        /// sorting, delivering, delivered, delivery_fail, waiting_to_return, return, returning, returned
+        /// </summary>
+        public string? Status { get; set; }
     }
 
     #endregion

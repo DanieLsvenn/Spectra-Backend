@@ -687,6 +687,24 @@ namespace SpectraGlasses.WebAPI.Controllers
                 return BadRequest(new ErrorResponse { ErrorCode = "VALIDATION_ERROR", Message = string.Join("; ", validationResult.Errors) });
             }
 
+            // Calculate new order total and enforce equal-price exchange
+            double newTotal = 0;
+            foreach (var item in orderItems)
+            {
+                var unitPrice = await _orderService.CalculateItemPriceAsync(item);
+                newTotal += unitPrice * (item.Quantity ?? 1);
+            }
+
+            var originalTotal = (complaint.OrderItem?.UnitPrice ?? 0) * (complaint.OrderItem?.Quantity ?? 1);
+            if (Math.Abs(newTotal - originalTotal) > 0.01)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    ErrorCode = "PRICE_MISMATCH",
+                    Message = $"Exchange products must have equal total price. Original: {originalTotal:N0}₫, New: {newTotal:N0}₫"
+                });
+            }
+
             var order = new Order
             {
                 UserId = userId,

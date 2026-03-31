@@ -19,6 +19,11 @@ public partial class FrameColor
     /// </summary>
     public int? StockQuantity { get; set; }
 
+    /// <summary>
+    /// Extra cost for this specific frame-color combination (case by case)
+    /// </summary>
+    public double? ColorExtraCost { get; set; }
+
     public virtual Frame Frame { get; set; }
 
     public virtual Color Color { get; set; }

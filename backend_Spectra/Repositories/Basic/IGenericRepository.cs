@@ -43,6 +43,12 @@ namespace Repositories.Basic
         public bool Delete(T entity);
         public Task<bool> DeleteAsync(T entity);
 
+        // --- Save (commit tracked changes without full-entity overwrite) ---
+        public Task SaveAsync();
+
+        // --- Tracker ---
+        public void ClearTracker();
+
         // --- Utilities ---
         public Task<int> GetMaxId();
     }

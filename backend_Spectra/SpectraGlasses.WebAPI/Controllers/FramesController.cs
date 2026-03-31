@@ -255,7 +255,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 var colorInputs = request.ColorVariants.Select(cv => new FrameColorInput
                 {
                     ColorId = cv.ColorId,
-                    StockQuantity = cv.StockQuantity
+                    StockQuantity = cv.StockQuantity,
+                    ColorExtraCost = cv.ColorExtraCost
                 }).ToList();
                 await _frameService.SetFrameColorsAsync(createdFrame.FrameId, colorInputs);
             }
@@ -360,7 +361,8 @@ namespace SpectraGlasses.WebAPI.Controllers
                 var colorInputs = request.ColorVariants.Select(cv => new FrameColorInput
                 {
                     ColorId = cv.ColorId,
-                    StockQuantity = cv.StockQuantity
+                    StockQuantity = cv.StockQuantity,
+                    ColorExtraCost = cv.ColorExtraCost
                 }).ToList();
                 await _frameService.SetFrameColorsAsync(id, colorInputs);
             }

@@ -65,6 +65,8 @@ public partial class Context : DbContext
     public virtual DbSet<PreorderStatusLog> PreorderStatusLogs { get; set; }
 
     public virtual DbSet<FrameLensType> FrameLensTypes { get; set; }
+
+    public virtual DbSet<BusinessRule> BusinessRules { get; set; }
     
     private string GetConnectionString()
     {
@@ -179,6 +181,9 @@ public partial class Context : DbContext
                 .HasColumnName("isDefault");
             entity.Property(e => e.StockQuantity)
                 .HasColumnName("stockQuantity")
+                .IsRequired(false);
+            entity.Property(e => e.ColorExtraCost)
+                .HasColumnName("colorExtraCost")
                 .IsRequired(false);
 
             entity.HasOne(d => d.Frame).WithMany(p => p.FrameColors)
@@ -469,7 +474,7 @@ public partial class Context : DbContext
                 .HasColumnType("datetime")
                 .HasColumnName("createdAt");
             entity.Property(e => e.ShippingAddress)
-                .HasMaxLength(200)
+                .HasMaxLength(500)
                 .HasColumnName("shippingAddress");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
@@ -502,6 +507,9 @@ public partial class Context : DbContext
                 .HasColumnName("convertedFromPreorderId");
             entity.Property(e => e.CancelledByCustomer)
                 .HasColumnName("cancelledByCustomer");
+            entity.Property(e => e.Notes)
+                .HasColumnType("nvarchar(max)")
+                .HasColumnName("notes");
 
             entity.HasOne(d => d.ConvertedFromPreorder)
                 .WithMany()
@@ -922,6 +930,34 @@ public partial class Context : DbContext
             entity.HasOne(d => d.CreatedByUser).WithMany()
                 .HasForeignKey(d => d.CreatedBy)
                 .HasConstraintName("FK_PREORDER_STATUS_LOG_USER");
+        });
+
+        modelBuilder.Entity<BusinessRule>(entity =>
+        {
+            entity.HasKey(e => e.RuleId);
+
+            entity.ToTable("BusinessRule");
+
+            entity.Property(e => e.RuleId)
+                .HasDefaultValueSql("(newid())");
+            entity.Property(e => e.RuleKey)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.RuleValue)
+                .IsRequired()
+                .HasMaxLength(500);
+            entity.Property(e => e.Description)
+                .HasMaxLength(500);
+            entity.Property(e => e.Category)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasDefaultValue("general");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.UpdatedBy)
+                .HasMaxLength(200);
+
+            entity.HasIndex(e => e.RuleKey).IsUnique();
         });
 
         OnModelCreatingPartial(modelBuilder);

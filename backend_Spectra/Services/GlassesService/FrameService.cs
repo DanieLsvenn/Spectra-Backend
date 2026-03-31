@@ -61,6 +61,7 @@ namespace Services.GlassesService
     {
         public Guid ColorId { get; set; }
         public int StockQuantity { get; set; }
+        public double ColorExtraCost { get; set; }
     }
 
     public class FrameService : IFrameService
@@ -129,7 +130,7 @@ namespace Services.GlassesService
         {
             var allFrames = await GetFrameQueryWithIncludes().ToListAsync();
 
-            // FrameIds in upcoming (not-yet-started) campaigns — hide these if out of stock
+            // FrameIds in upcoming (not-yet-started) campaigns ï¿½ hide these if out of stock
             var upcomingCampaignFrameIds = await _campaignService.GetUpcomingCampaignFrameIdsAsync();
 
             // Show all non-inactive frames, but hide out-of-stock frames
@@ -507,7 +508,8 @@ namespace Services.GlassesService
                     FrameId = frameId,
                     ColorId = colorInputs[i].ColorId,
                     IsDefault = i == 0,
-                    StockQuantity = colorInputs[i].StockQuantity
+                    StockQuantity = colorInputs[i].StockQuantity,
+                    ColorExtraCost = colorInputs[i].ColorExtraCost
                 };
                 await _frameColorRepository.CreateAsync(frameColor);
                 totalStock += colorInputs[i].StockQuantity;

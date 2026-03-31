@@ -41,6 +41,7 @@ namespace Services.GlassesService
         private readonly GenericRepository<Order> _orderRepository;
         private readonly GenericRepository<OrderItem> _orderItemRepository;
         private readonly GenericRepository<Frame> _frameRepository;
+        private readonly GenericRepository<FrameColor> _frameColorRepository;
         private readonly GenericRepository<FrameLensType> _frameLensTypeRepository;
         private readonly GenericRepository<LensType> _lensTypeRepository;
         private readonly GenericRepository<LensFeature> _lensFeatureRepository;
@@ -74,6 +75,7 @@ namespace Services.GlassesService
             GenericRepository<Order> orderRepository,
             GenericRepository<OrderItem> orderItemRepository,
             GenericRepository<Frame> frameRepository,
+            GenericRepository<FrameColor> frameColorRepository,
             GenericRepository<FrameLensType> frameLensTypeRepository,
             GenericRepository<LensType> lensTypeRepository,
             GenericRepository<LensFeature> lensFeatureRepository,
@@ -86,6 +88,7 @@ namespace Services.GlassesService
             _orderRepository = orderRepository;
             _orderItemRepository = orderItemRepository;
             _frameRepository = frameRepository;
+            _frameColorRepository = frameColorRepository;
             _frameLensTypeRepository = frameLensTypeRepository;
             _lensTypeRepository = lensTypeRepository;
             _lensFeatureRepository = lensFeatureRepository;
@@ -599,7 +602,17 @@ namespace Services.GlassesService
                 lensIndexPrice = lensIndex?.AdditionalPrice ?? 0;
             }
 
-            return basePrice + lensTypePrice + featurePrice + lensIndexPrice;
+            // Get color extra cost for this specific frame-color combination
+            double colorExtraCost = 0;
+            if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
+            {
+                var frameColors = await _frameColorRepository.SearchAsync(
+                    fc => fc.FrameId == item.FrameId && fc.ColorId == item.SelectedColorId);
+                var frameColor = frameColors.FirstOrDefault();
+                colorExtraCost = frameColor?.ColorExtraCost ?? 0;
+            }
+
+            return basePrice + lensTypePrice + featurePrice + lensIndexPrice + colorExtraCost;
         }
 
         #endregion

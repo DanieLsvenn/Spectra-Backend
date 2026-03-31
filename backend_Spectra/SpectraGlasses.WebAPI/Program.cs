@@ -30,10 +30,15 @@ builder.Services.AddControllers()
     });
 // Add HttpClient for Firebase authentication
 builder.Services.AddHttpClient();
-// Register named HttpClient for GoShip API
-builder.Services.AddHttpClient("GoShip", client =>
+// Register named HttpClient for Ahamove API
+builder.Services.AddHttpClient("Ahamove", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["GoShip:BaseUrl"] ?? "https://sandbox.goship.io/api/v2");
+    client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+});
+
+// Register named HttpClient for GHN API
+builder.Services.AddHttpClient("GHN", client =>
+{
     client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 });
 
@@ -99,6 +104,7 @@ builder.Services.AddScoped<GenericRepository<PreorderCampaign>>();
 builder.Services.AddScoped<GenericRepository<CampaignFrame>>();
 builder.Services.AddScoped<GenericRepository<PreorderStatusLog>>();
 builder.Services.AddScoped<GenericRepository<FrameLensType>>();
+builder.Services.AddScoped<GenericRepository<BusinessRule>>();
 
 // Register services
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -122,7 +128,9 @@ builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IProductReviewService, ProductReviewService>();
 builder.Services.AddScoped<IPreorderCampaignService, PreorderCampaignService>();
 builder.Services.AddScoped<IShippingService, ShippingService>();
-builder.Services.AddSingleton<IExchangeRateService, ExchangeRateService>();
+builder.Services.AddScoped<IGhnService, GhnService>();
+builder.Services.AddScoped<IBusinessRuleService, BusinessRuleService>();
+builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");

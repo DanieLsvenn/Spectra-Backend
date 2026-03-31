@@ -45,6 +45,8 @@ namespace SpectraGlasses.WebAPI.Controllers
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
         {
             var userId = GetCurrentUserId();
+            var debugSteps = new List<object>();
+            debugSteps.Add(new { step = "0_userId", userId = userId });
 
             if (userId == Guid.Empty)
             {
@@ -86,8 +88,11 @@ namespace SpectraGlasses.WebAPI.Controllers
                 SelectedSize = item.SelectedSize
             }).ToList();
 
+            debugSteps.Add(new { step = "1_items_mapped", count = orderItems.Count, firstFrameId = orderItems.FirstOrDefault()?.FrameId });
+
             // Validate order items
             var validationResult = await _orderService.ValidateOrderItemsAsync(orderItems, userId);
+            debugSteps.Add(new { step = "2_validated", valid = validationResult.IsValid });
 
             if (!validationResult.IsValid)
             {
@@ -107,7 +112,17 @@ namespace SpectraGlasses.WebAPI.Controllers
                 Notes = request.Notes
             };
 
+            debugSteps.Add(new { step = "3_order_built", orderUserId = order.UserId });
+
             var createdOrder = await _orderService.CreateOrderAsync(order, orderItems);
+
+            debugSteps.Add(new { 
+                step = "4_after_create", 
+                createdOrderId = createdOrder.OrderId,
+                createdUserId = createdOrder.UserId, 
+                createdItemCount = createdOrder.OrderItems?.Count ?? -1,
+                createdTotal = createdOrder.TotalAmount
+            });
 
             // Calculate and apply shipping fee (zone-based for express), then persist
             var shippingFee = _shippingService.CalculateShippingFee(
@@ -115,6 +130,13 @@ namespace SpectraGlasses.WebAPI.Controllers
             createdOrder.ShippingFee = shippingFee;
             createdOrder.TotalAmount = (createdOrder.TotalAmount ?? 0) + shippingFee;
             await _orderService.UpdateOrderShippingAsync(createdOrder.OrderId, createdOrder.ShippingMethod, shippingFee, createdOrder.TotalAmount ?? 0);
+
+            debugSteps.Add(new { 
+                step = "5_after_shipping", 
+                userId = createdOrder.UserId, 
+                itemCount = createdOrder.OrderItems?.Count ?? -1,
+                shippingFee = shippingFee
+            });
 
             var summary = new OrderSummaryResponse
             {
@@ -128,7 +150,7 @@ namespace SpectraGlasses.WebAPI.Controllers
                 ConvertedFromPreorderId = createdOrder.ConvertedFromPreorderId
             };
 
-            return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder.OrderId }, summary);
+            return Ok(new { summary, debugSteps });
         }
 
         /// <summary>

@@ -65,6 +65,7 @@ namespace Services.GlassesService
     {
         private readonly GenericRepository<Payment> _paymentRepository;
         private readonly GenericRepository<Order> _orderRepository;
+        private readonly IOrderService _orderService;
         private readonly GenericRepository<Preorder> _preorderRepository;
         private readonly IConfiguration _configuration;
         private readonly IExchangeRateService _exchangeRateService;
@@ -91,12 +92,14 @@ namespace Services.GlassesService
         public PaymentService(
             GenericRepository<Payment> paymentRepository,
             GenericRepository<Order> orderRepository,
+            IOrderService orderService,
             GenericRepository<Preorder> preorderRepository,
             IConfiguration configuration,
             IExchangeRateService exchangeRateService)
         {
             _paymentRepository = paymentRepository;
             _orderRepository = orderRepository;
+            _orderService = orderService;
             _preorderRepository = preorderRepository;
             _configuration = configuration;
             _exchangeRateService = exchangeRateService;
@@ -113,9 +116,8 @@ namespace Services.GlassesService
 
         public async Task<(Payment? Payment, string Error)> CreatePaymentForOrderAsync(Guid orderId, string paymentMethod)
         {
-            // Validate only one foreign key
-            var orders = await _orderRepository.SearchAsync(o => o.OrderId == orderId);
-            var order = orders.FirstOrDefault();
+            // Load order with items/shipping details so we can guarantee amount includes shipping.
+            var order = await _orderService.GetOrderByIdWithDetailsAsync(orderId);
 
             if (order == null)
             {
@@ -138,12 +140,25 @@ namespace Services.GlassesService
                 return (null, "A pending payment already exists for this order");
             }
 
+            // Ensure shipping fee is included in final payment amount (order.TotalAmount is expected to include it,
+            // but sometimes order may still be item subtotal when race condition or stale data occurs).
+            double finalAmount = order.TotalAmount ?? 0;
+            var orderItemsTotal = order.OrderItems?.Sum(i => (i.UnitPrice ?? 0) * (i.Quantity ?? 1)) ?? 0;
+            var shippingFee = order.ShippingFee ?? 0;
+
+            // If order total doesn't already include shipping, add it.
+            if (Math.Abs(finalAmount - (orderItemsTotal + shippingFee)) > 0.01)
+            {
+                // items total + shipping (as expected). If finalAmount already includes shipping exactly, this does nothing.
+                finalAmount = orderItemsTotal + shippingFee;
+            }
+
             var payment = new Payment
             {
                 PaymentId = Guid.NewGuid(),
                 OrderId = orderId,
                 PreorderId = null, // Ensure only one FK is set
-                Amount = order.TotalAmount,
+                Amount = finalAmount,
                 PaymentMethod = paymentMethod.ToLower(),
                 PaymentStatus = PaymentStatus.Pending
             };
@@ -331,13 +346,41 @@ namespace Services.GlassesService
                 var vnp_Url = vnpayConfig["PaymentUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
                 var vnp_Version = vnpayConfig["Version"] ?? "2.1.0";
 
-                // Convert USD to VND using live exchange rate (VNPay only accepts VND)
+                // Ensure we use the actual order/preorder total (with shipping included) if possible.
+                var usdAmount = request.Amount;
+                var paymentRecord = GetPaymentByIdAsync(request.PaymentId).GetAwaiter().GetResult();
+
+                if (paymentRecord != null)
+                {
+                    if (paymentRecord.OrderId.HasValue)
+                    {
+                        var order = _orderService.GetOrderByIdWithDetailsAsync(paymentRecord.OrderId.Value).GetAwaiter().GetResult();
+                        if (order != null && order.TotalAmount.HasValue)
+                        {
+                            usdAmount = order.TotalAmount.Value;
+                        }
+                    }
+                    else if (paymentRecord.PreorderId.HasValue)
+                    {
+                        var preorder = _preorderRepository.SearchAsync(p => p.PreorderId == paymentRecord.PreorderId.Value).GetAwaiter().GetResult().FirstOrDefault();
+                        if (preorder != null && preorder.TotalAmount.HasValue)
+                        {
+                            usdAmount = preorder.TotalAmount.Value;
+                        }
+                    }
+                }
+
+
+                // Convert USD to VND using the rate service (which now reads business-rule override first)
                 var usdToVndRate = _exchangeRateService.GetUsdToVndRateAsync().GetAwaiter().GetResult();
-                var amountInVnd = request.Amount * usdToVndRate;
-                
+                var amountInVnd = usdAmount * usdToVndRate;
+
+                // Align with front-end rounding policy: round to nearest 500 VND
+                var amountInVndRounded = Math.Round(amountInVnd / 500.0, MidpointRounding.AwayFromZero) * 500.0;
+
                 // VNPay requires amount in VND * 100 (no decimal)
                 // Minimum amount is typically 10,000 VND
-                var vnpayAmount = (long)(amountInVnd * 100);
+                var vnpayAmount = (long)(amountInVndRounded * 100);
 
                 // Use Vietnam timezone (UTC+7) for VNPay
                 var vietnamNow = TimeHelper.Now;
@@ -467,12 +510,21 @@ namespace Services.GlassesService
                 return null;
             }
 
+            // Skip if already completed (idempotent for IPN + return URL race)
+            if (payment.PaymentStatus?.ToLower() == PaymentStatus.Completed)
+            {
+                return payment;
+            }
+
             payment.PaymentStatus = PaymentStatus.Completed;
             payment.PaidAt = TimeHelper.Now;
 
-            var updatedPayment = await _paymentRepository.UpdateAsync(payment);
+            // Use SaveAsync — only updates changed columns (PaymentStatus, PaidAt).
+            // UpdateAsync uses EntityState.Modified which overwrites ALL columns and
+            // was proven to set Order.userId to NULL in production.
+            await _paymentRepository.SaveAsync();
 
-            // Update order/preorder status if payment completed
+            // Update order status — use SaveAsync to only change the Status column
             if (payment.OrderId.HasValue)
             {
                 var orders = await _orderRepository.SearchAsync(o => o.OrderId == payment.OrderId);
@@ -480,10 +532,11 @@ namespace Services.GlassesService
                 if (order != null && order.Status?.ToLower() == "pending")
                 {
                     order.Status = "confirmed";
-                    await _orderRepository.UpdateAsync(order);
+                    await _orderRepository.SaveAsync();
                 }
             }
 
+            // Update preorder status
             if (payment.PreorderId.HasValue)
             {
                 var preorders = await _preorderRepository.SearchAsync(p => p.PreorderId == payment.PreorderId);
@@ -491,11 +544,11 @@ namespace Services.GlassesService
                 if (preorder != null)
                 {
                     preorder.Status = "paid";
-                    await _preorderRepository.UpdateAsync(preorder);
+                    await _preorderRepository.SaveAsync();
                 }
             }
 
-            return updatedPayment;
+            return payment;
         }
 
         private static string HmacSHA512(string key, string inputData)

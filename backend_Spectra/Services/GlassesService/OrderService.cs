@@ -1,9 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Repositories.Basic;
 using Repositories.ModelExtensions;
 using Repositories.Models;
@@ -18,25 +16,25 @@ namespace Services.GlassesService
 
     public interface IOrderService
     {
-        // Create operations
+        // Create
         Task<Order> CreateOrderAsync(Order order, List<OrderItem> orderItems);
         Task<OrderValidationResult> ValidateOrderItemsAsync(List<OrderItem> orderItems, Guid userId);
 
-        // Read operations
+        // Read
         Task<Order?> GetOrderByIdAsync(Guid orderId);
         Task<Order?> GetOrderByIdWithDetailsAsync(Guid orderId);
         Task<List<Order>> GetOrdersByUserAsync(Guid userId);
         Task<PaginationResult<Order>> GetOrdersByUserAsync(Guid userId, int currentPage = 1, int pageSize = 10);
         Task<PaginationResult<Order>> GetAllOrdersAsync(int currentPage = 1, int pageSize = 10);
 
-        // Update operations
+        // Update
         Task<Order?> UpdateOrderStatusAsync(Guid orderId, string newStatus, string userRole, Guid userId);
         Task<Order?> UpdateOrderShippingAsync(Guid orderId, string shippingMethod, double shippingFee, double totalAmount);
         Task<bool> CanModifyOrderAsync(Guid orderId);
         Task<Order?> ConfirmDeliveryAsync(Guid orderId, Guid userId);
         Task<Order?> CancelOrderByCustomerAsync(Guid orderId, Guid userId);
 
-        // Price calculation
+        // Price
         Task<double> CalculateOrderTotalAsync(List<OrderItem> orderItems);
         Task<double> CalculateItemPriceAsync(OrderItem item);
     }
@@ -54,186 +52,108 @@ namespace Services.GlassesService
         private readonly GenericRepository<Prescription> _prescriptionRepository;
         private readonly GenericRepository<Payment> _paymentRepository;
 
-        // Order statuses
         public static class OrderStatus
         {
-            public const string Pending = "pending";
-            public const string Confirmed = "confirmed";
+            public const string Pending    = "pending";
+            public const string Confirmed  = "confirmed";
             public const string Processing = "processing";
-            public const string Shipped = "shipped";
-            public const string Delivered = "delivered";
-            public const string Cancelled = "cancelled";
+            public const string Shipped    = "shipped";
+            public const string Delivered  = "delivered";
+            public const string Cancelled  = "cancelled";
         }
 
-        // Valid status transitions
         private static readonly Dictionary<string, string[]> ValidStatusTransitions = new()
         {
-            { OrderStatus.Pending, new[] { OrderStatus.Confirmed, OrderStatus.Cancelled } },
-            { OrderStatus.Confirmed, new[] { OrderStatus.Processing, OrderStatus.Cancelled } },
-            { OrderStatus.Processing, new[] { OrderStatus.Shipped, OrderStatus.Cancelled } },
-            { OrderStatus.Shipped, new[] { OrderStatus.Delivered } },
-            { OrderStatus.Delivered, Array.Empty<string>() },
-            { OrderStatus.Cancelled, Array.Empty<string>() }
+            { OrderStatus.Pending,    new[] { OrderStatus.Confirmed,  OrderStatus.Cancelled } },
+            { OrderStatus.Confirmed,  new[] { OrderStatus.Processing, OrderStatus.Cancelled } },
+            { OrderStatus.Processing, new[] { OrderStatus.Shipped,    OrderStatus.Cancelled } },
+            { OrderStatus.Shipped,    new[] { OrderStatus.Delivered } },
+            { OrderStatus.Delivered,  Array.Empty<string>() },
+            { OrderStatus.Cancelled,  Array.Empty<string>() }
         };
 
         public OrderService(
-            GenericRepository<Order> orderRepository,
-            GenericRepository<OrderItem> orderItemRepository,
-            GenericRepository<Frame> frameRepository,
-            GenericRepository<FrameColor> frameColorRepository,
+            GenericRepository<Order>         orderRepository,
+            GenericRepository<OrderItem>     orderItemRepository,
+            GenericRepository<Frame>         frameRepository,
+            GenericRepository<FrameColor>    frameColorRepository,
             GenericRepository<FrameLensType> frameLensTypeRepository,
-            GenericRepository<LensType> lensTypeRepository,
-            GenericRepository<LensFeature> lensFeatureRepository,
-            GenericRepository<LensIndex> lensIndexRepository,
-            GenericRepository<Prescription> prescriptionRepository,
-            GenericRepository<Payment> paymentRepository)
+            GenericRepository<LensType>      lensTypeRepository,
+            GenericRepository<LensFeature>   lensFeatureRepository,
+            GenericRepository<LensIndex>     lensIndexRepository,
+            GenericRepository<Prescription>  prescriptionRepository,
+            GenericRepository<Payment>       paymentRepository)
         {
-            _orderRepository = orderRepository;
-            _orderItemRepository = orderItemRepository;
-            _frameRepository = frameRepository;
-            _frameColorRepository = frameColorRepository;
+            _orderRepository         = orderRepository;
+            _orderItemRepository     = orderItemRepository;
+            _frameRepository         = frameRepository;
+            _frameColorRepository    = frameColorRepository;
             _frameLensTypeRepository = frameLensTypeRepository;
-            _lensTypeRepository = lensTypeRepository;
-            _lensFeatureRepository = lensFeatureRepository;
-            _lensIndexRepository = lensIndexRepository;
-            _prescriptionRepository = prescriptionRepository;
-            _paymentRepository = paymentRepository;
+            _lensTypeRepository      = lensTypeRepository;
+            _lensFeatureRepository   = lensFeatureRepository;
+            _lensIndexRepository     = lensIndexRepository;
+            _prescriptionRepository  = prescriptionRepository;
+            _paymentRepository       = paymentRepository;
         }
 
-        #region Create Operations
+        // ================================================================
+        //  CREATE
+        // ================================================================
 
         public async Task<Order> CreateOrderAsync(Order order, List<OrderItem> orderItems)
         {
-            // Set order defaults
-            order.OrderId = Guid.NewGuid();
-            order.Status = OrderStatus.Pending;
-            order.CreatedAt = TimeHelper.Now;
+            // Step 1: Calculate all prices upfront.
+            // SearchAsync loads entities as "Unchanged" — EF will not re-INSERT them,
+            // so having them in the tracker does not pollute later Add() calls.
+            double total = 0;
+            foreach (var item in orderItems)
+            {
+                item.UnitPrice = await CalculateItemPriceAsync(item);
+                total += (item.UnitPrice ?? 0) * (item.Quantity ?? 1);
+            }
 
-            // Calculate total amount
-            order.TotalAmount = await CalculateOrderTotalAsync(orderItems);
+            // Step 2: Persist the order.
+            // Clear the tracker first so EF does not reconcile the Order's nullable FK
+            // navigation properties (e.g. User = null) against the explicitly-set FK
+            // values (e.g. UserId = validGuid).  Without this, EF Core 8 relationship
+            // fixup can silently null-out FK columns on the new entity.
+            order.OrderId     = Guid.NewGuid();
+            order.Status      = OrderStatus.Pending;
+            order.CreatedAt   = TimeHelper.Now;
+            order.TotalAmount = total;
 
-            // Create the order
+            _orderRepository.ClearTracker();
             var createdOrder = await _orderRepository.CreateAsync(order);
 
-            // Create order items and deduct stock
+            // Step 3: Persist each order item.
+            // Clear the tracker before each insert so EF uses the explicit FK values
+            // (OrderId, FrameId, SelectedColorId, …) without navigation-property fixup
+            // overriding them.  Same reason as the clear above.
             foreach (var item in orderItems)
             {
                 item.OrderItemId = Guid.NewGuid();
-                item.OrderId = createdOrder.OrderId;
-                item.UnitPrice = await CalculateItemPriceAsync(item);
+                item.OrderId     = createdOrder.OrderId;
+                _orderItemRepository.ClearTracker();
                 await _orderItemRepository.CreateAsync(item);
-
-                // Deduct stock per color variant
-                if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
-                {
-                    await DeductVariantStockAsync(item.FrameId.Value, item.SelectedColorId.Value, item.Quantity ?? 1);
-                }
-                else if (item.FrameId.HasValue)
-                {
-                    await DeductFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
-                }
             }
 
-            // Return order with items
+            // Step 4: Deduct stock — done in a SEPARATE pass after all items are saved.
+            // UpdateAsync clears the tracker internally; doing this inside the item loop
+            // was the root cause of missing items in the old code.
+            foreach (var item in orderItems)
+            {
+                if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
+                    await DeductVariantStockAsync(item.FrameId.Value, item.SelectedColorId.Value, item.Quantity ?? 1);
+                else if (item.FrameId.HasValue)
+                    await DeductFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
+            }
+
             return await GetOrderByIdWithDetailsAsync(createdOrder.OrderId) ?? createdOrder;
         }
 
-        private async Task DeductFrameStockAsync(Guid frameId, int quantity)
-        {
-            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
-            var frame = frames.FirstOrDefault();
-            
-            if (frame != null)
-            {
-                var currentStock = frame.StockQuantity ?? 0;
-                frame.StockQuantity = Math.Max(0, currentStock - quantity);
-                
-                // Auto-update status if out of stock
-                if (frame.StockQuantity <= 0)
-                {
-                    frame.Status = "out_of_stock";
-                }
-                
-                await _frameRepository.UpdateAsync(frame);
-            }
-        }
-
-        private async Task DeductVariantStockAsync(Guid frameId, Guid colorId, int quantity)
-        {
-            var variants = await _frameColorRepository.SearchAsync(
-                fc => fc.FrameId == frameId && fc.ColorId == colorId);
-            var variant = variants.FirstOrDefault();
-
-            if (variant != null)
-            {
-                var currentStock = variant.StockQuantity ?? 0;
-                variant.StockQuantity = Math.Max(0, currentStock - quantity);
-                await _frameColorRepository.UpdateAsync(variant);
-            }
-
-            // Also update frame-level stock
-            await RecalculateFrameStockAsync(frameId);
-        }
-
-        private async Task RestoreFrameStockAsync(Guid frameId, int quantity)
-        {
-            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
-            var frame = frames.FirstOrDefault();
-            
-            if (frame != null)
-            {
-                var currentStock = frame.StockQuantity ?? 0;
-                frame.StockQuantity = currentStock + quantity;
-                
-                // Auto-update status if back in stock
-                if (frame.StockQuantity > 0 && frame.Status?.ToLower() == "out_of_stock")
-                {
-                    frame.Status = "available";
-                }
-                
-                await _frameRepository.UpdateAsync(frame);
-            }
-        }
-
-        private async Task RestoreVariantStockAsync(Guid frameId, Guid colorId, int quantity)
-        {
-            var variants = await _frameColorRepository.SearchAsync(
-                fc => fc.FrameId == frameId && fc.ColorId == colorId);
-            var variant = variants.FirstOrDefault();
-
-            if (variant != null)
-            {
-                var currentStock = variant.StockQuantity ?? 0;
-                variant.StockQuantity = currentStock + quantity;
-                await _frameColorRepository.UpdateAsync(variant);
-            }
-
-            // Also update frame-level stock
-            await RecalculateFrameStockAsync(frameId);
-        }
-
-        private async Task RecalculateFrameStockAsync(Guid frameId)
-        {
-            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
-            var frame = frames.FirstOrDefault();
-            if (frame == null) return;
-
-            var allVariants = await _frameColorRepository.SearchAsync(fc => fc.FrameId == frameId);
-            var totalStock = allVariants.Sum(v => v.StockQuantity ?? 0);
-
-            frame.StockQuantity = totalStock;
-
-            if (totalStock <= 0)
-            {
-                frame.Status = "out_of_stock";
-            }
-            else if (frame.Status?.ToLower() == "out_of_stock")
-            {
-                frame.Status = "available";
-            }
-
-            await _frameRepository.UpdateAsync(frame);
-        }
+        // ================================================================
+        //  VALIDATION
+        // ================================================================
 
         public async Task<OrderValidationResult> ValidateOrderItemsAsync(List<OrderItem> orderItems, Guid userId)
         {
@@ -248,99 +168,76 @@ namespace Services.GlassesService
 
             foreach (var item in orderItems)
             {
-                Frame frame = null;
+                Frame? frame = null;
 
-                // Validate frame exists and is available
-                if (item.FrameId.HasValue)
-                {
-                    var frames = await _frameRepository.SearchAsyncInclude(
-                        f => f.FrameId == item.FrameId,
-                        f => f.FrameColors);
-                    frame = frames.FirstOrDefault();
-
-                    if (frame == null)
-                    {
-                        result.IsValid = false;
-                        result.Errors.Add($"Frame with ID {item.FrameId} not found");
-                        continue;
-                    }
-
-                    if (frame.Status?.ToLower() != "available")
-                    {
-                        result.IsValid = false;
-                        result.Errors.Add($"Frame '{frame.FrameName}' is not available");
-                        continue;
-                    }
-
-                    var requestedQuantity = item.Quantity ?? 1;
-
-                    // Validate per-color variant stock if a color is selected
-                    if (item.SelectedColorId.HasValue)
-                    {
-                        var variant = frame.FrameColors.FirstOrDefault(
-                            fc => fc.ColorId == item.SelectedColorId);
-
-                        if (variant == null)
-                        {
-                            result.IsValid = false;
-                            result.Errors.Add($"Color is not available for frame '{frame.FrameName}'");
-                            continue;
-                        }
-
-                        var variantStock = variant.StockQuantity ?? 0;
-                        if (variantStock < requestedQuantity)
-                        {
-                            result.IsValid = false;
-                            if (variantStock <= 0)
-                            {
-                                result.Errors.Add($"Frame '{frame.FrameName}' in the selected color is out of stock. Please choose a different color or use Preorder.");
-                            }
-                            else
-                            {
-                                result.Errors.Add($"Frame '{frame.FrameName}' in the selected color only has {variantStock} in stock, but {requestedQuantity} requested");
-                            }
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // No color selected - validate frame-level stock
-                        var availableStock = frame.StockQuantity ?? 0;
-                        if (availableStock < requestedQuantity)
-                        {
-                            result.IsValid = false;
-                            if (availableStock <= 0)
-                            {
-                                result.Errors.Add($"Frame '{frame.FrameName}' is out of stock. Please use Preorder instead.");
-                            }
-                            else
-                            {
-                                result.Errors.Add($"Frame '{frame.FrameName}' only has {availableStock} in stock, but {requestedQuantity} requested");
-                            }
-                            continue;
-                        }
-
-                        // Require color selection if frame has colors defined
-                        if (frame.FrameColors.Any())
-                        {
-                            result.IsValid = false;
-                            result.Errors.Add($"Frame '{frame.FrameName}' requires a color selection. Available colors have individual stock levels.");
-                            continue;
-                        }
-                    }
-                }
-                else
+                if (!item.FrameId.HasValue)
                 {
                     result.IsValid = false;
                     result.Errors.Add("Each order item must have a frame");
                     continue;
                 }
 
-                // Validate lens type
+                var frames = await _frameRepository.SearchAsyncInclude(
+                    f => f.FrameId == item.FrameId,
+                    f => f.FrameColors);
+                frame = frames.FirstOrDefault();
+
+                if (frame == null)
+                {
+                    result.IsValid = false;
+                    result.Errors.Add($"Frame with ID {item.FrameId} not found");
+                    continue;
+                }
+
+                if (frame.Status?.ToLower() != "available")
+                {
+                    result.IsValid = false;
+                    result.Errors.Add($"Frame '{frame.FrameName}' is not available");
+                    continue;
+                }
+
+                var requestedQty = item.Quantity ?? 1;
+
+                if (item.SelectedColorId.HasValue)
+                {
+                    var variant = frame.FrameColors.FirstOrDefault(fc => fc.ColorId == item.SelectedColorId);
+                    if (variant == null)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Selected color is not available for frame '{frame.FrameName}'");
+                        continue;
+                    }
+                    if ((variant.StockQuantity ?? 0) < requestedQty)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add((variant.StockQuantity ?? 0) <= 0
+                            ? $"Frame '{frame.FrameName}' in the selected color is out of stock"
+                            : $"Frame '{frame.FrameName}' in the selected color only has {variant.StockQuantity} in stock");
+                        continue;
+                    }
+                }
+                else
+                {
+                    if (frame.FrameColors.Any())
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Frame '{frame.FrameName}' requires a color selection");
+                        continue;
+                    }
+                    if ((frame.StockQuantity ?? 0) < requestedQty)
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add((frame.StockQuantity ?? 0) <= 0
+                            ? $"Frame '{frame.FrameName}' is out of stock. Please use Preorder instead."
+                            : $"Frame '{frame.FrameName}' only has {frame.StockQuantity} in stock");
+                        continue;
+                    }
+                }
+
                 if (item.LensTypeId.HasValue)
                 {
                     var lensTypes = await _lensTypeRepository.SearchAsync(lt => lt.LensTypeId == item.LensTypeId);
-                    var lensType = lensTypes.FirstOrDefault();
+                    var lensType  = lensTypes.FirstOrDefault();
 
                     if (lensType == null)
                     {
@@ -349,31 +246,15 @@ namespace Services.GlassesService
                         continue;
                     }
 
-                    // Validate that the lens type is supported by this frame
-                    if (frame != null)
+                    var supported   = await _frameLensTypeRepository.SearchAsync(flt => flt.FrameId == frame.FrameId);
+                    var supportedIds = supported.Where(s => s.LensTypeId.HasValue).Select(s => s.LensTypeId!.Value).ToHashSet();
+                    if (supportedIds.Any() && lensType.RequiresPrescription == true && !supportedIds.Contains(lensType.LensTypeId))
                     {
-                        var supportedLensTypes = await _frameLensTypeRepository.SearchAsync(
-                            flt => flt.FrameId == frame.FrameId);
-                        var supportedIds = supportedLensTypes
-                            .Where(flt => flt.LensTypeId.HasValue)
-                            .Select(flt => flt.LensTypeId!.Value)
-                            .ToHashSet();
-
-                        // If the frame has supported lens types defined, validate against them
-                        // Single Vision and Non-Prescription are always allowed
-                        if (supportedIds.Any())
-                        {
-                            var isAlwaysAllowed = lensType.RequiresPrescription != true;
-                            if (!isAlwaysAllowed && !supportedIds.Contains(lensType.LensTypeId))
-                            {
-                                result.IsValid = false;
-                                result.Errors.Add($"Frame '{frame.FrameName}' does not support lens type '{lensType.LensSpecification}'. Please check the frame's supported lens types.");
-                                continue;
-                            }
-                        }
+                        result.IsValid = false;
+                        result.Errors.Add($"Frame '{frame.FrameName}' does not support lens type '{lensType.LensSpecification}'");
+                        continue;
                     }
 
-                    // Validate prescription requirement
                     if (lensType.RequiresPrescription == true)
                     {
                         if (!item.PrescriptionId.HasValue)
@@ -383,14 +264,13 @@ namespace Services.GlassesService
                             continue;
                         }
 
-                        // Validate prescription exists and belongs to user
                         var prescriptions = await _prescriptionRepository.SearchAsync(p => p.PrescriptionId == item.PrescriptionId);
-                        var prescription = prescriptions.FirstOrDefault();
+                        var prescription  = prescriptions.FirstOrDefault();
 
                         if (prescription == null)
                         {
                             result.IsValid = false;
-                            result.Errors.Add($"Prescription with ID {item.PrescriptionId} not found");
+                            result.Errors.Add("Prescription not found");
                         }
                         else if (prescription.UserId != userId)
                         {
@@ -402,28 +282,23 @@ namespace Services.GlassesService
                             result.IsValid = false;
                             result.Errors.Add("Prescription has expired");
                         }
-                        else if (frame != null)
+                        else
                         {
-                            // Validate prescription values against frame Rx/PD limits
                             ValidatePrescriptionAgainstFrame(result, frame, prescription);
                         }
                     }
                 }
 
-                // Validate lens feature if provided
                 if (item.FeatureId.HasValue)
                 {
                     var features = await _lensFeatureRepository.SearchAsync(f => f.FeatureId == item.FeatureId);
-                    var feature = features.FirstOrDefault();
-
-                    if (feature == null)
+                    if (!features.Any())
                     {
                         result.IsValid = false;
                         result.Errors.Add($"Lens feature with ID {item.FeatureId} not found");
                     }
                 }
 
-                // Validate quantity
                 if (!item.Quantity.HasValue || item.Quantity <= 0)
                 {
                     result.IsValid = false;
@@ -434,33 +309,26 @@ namespace Services.GlassesService
             return result;
         }
 
-        /// <summary>
-        /// Validates a prescription's sphere and PD values against the frame's supported Rx/PD limits.
-        /// </summary>
         private void ValidatePrescriptionAgainstFrame(OrderValidationResult result, Frame frame, Prescription prescription)
         {
-            // Validate Sphere (Rx) limits
             if (frame.MinRx.HasValue || frame.MaxRx.HasValue)
             {
-                var sphereValues = new List<double?> { prescription.SphereLeft, prescription.SphereRight };
-                foreach (var sphere in sphereValues.Where(s => s.HasValue))
+                foreach (var sphere in new[] { prescription.SphereLeft, prescription.SphereRight }.Where(s => s.HasValue))
                 {
                     if (frame.MinRx.HasValue && sphere < frame.MinRx)
                     {
                         result.IsValid = false;
-                        result.Errors.Add($"Prescription sphere value ({sphere}) is below the frame's minimum supported Rx ({frame.MinRx}). This frame cannot support your prescription.");
+                        result.Errors.Add($"Prescription sphere ({sphere}) is below the frame minimum Rx ({frame.MinRx})");
                         return;
                     }
                     if (frame.MaxRx.HasValue && sphere > frame.MaxRx)
                     {
                         result.IsValid = false;
-                        result.Errors.Add($"Prescription sphere value ({sphere}) exceeds the frame's maximum supported Rx ({frame.MaxRx}). This frame cannot support your prescription.");
+                        result.Errors.Add($"Prescription sphere ({sphere}) exceeds the frame maximum Rx ({frame.MaxRx})");
                         return;
                     }
                 }
             }
-
-            // Validate Pupillary Distance (PD) limits
             if (frame.MinPd.HasValue || frame.MaxPd.HasValue)
             {
                 if (prescription.PupillaryDistance.HasValue)
@@ -469,20 +337,20 @@ namespace Services.GlassesService
                     if (frame.MinPd.HasValue && pd < frame.MinPd)
                     {
                         result.IsValid = false;
-                        result.Errors.Add($"Prescription PD ({pd}mm) is below the frame's minimum supported PD ({frame.MinPd}mm). This frame cannot fit your pupillary distance.");
+                        result.Errors.Add($"PD ({pd}mm) is below the frame minimum PD ({frame.MinPd}mm)");
                     }
                     if (frame.MaxPd.HasValue && pd > frame.MaxPd)
                     {
                         result.IsValid = false;
-                        result.Errors.Add($"Prescription PD ({pd}mm) exceeds the frame's maximum supported PD ({frame.MaxPd}mm). This frame cannot fit your pupillary distance.");
+                        result.Errors.Add($"PD ({pd}mm) exceeds the frame maximum PD ({frame.MaxPd}mm)");
                     }
                 }
             }
         }
 
-        #endregion
-
-        #region Read Operations
+        // ================================================================
+        //  READ
+        // ================================================================
 
         public async Task<Order?> GetOrderByIdAsync(Guid orderId)
         {
@@ -496,39 +364,11 @@ namespace Services.GlassesService
                 o => o.OrderId == orderId,
                 o => o.OrderItems,
                 o => o.User,
-                o => o.Payments
-            );
-            
+                o => o.Payments);
+
             var order = orders.FirstOrDefault();
-            
             if (order != null)
-            {
-                // Load related data for each order item
-                foreach (var item in order.OrderItems)
-                {
-                    if (item.FrameId.HasValue)
-                    {
-                        var frames = await _frameRepository.SearchAsync(f => f.FrameId == item.FrameId);
-                        item.Frame = frames.FirstOrDefault();
-                    }
-                    if (item.LensTypeId.HasValue)
-                    {
-                        var lensTypes = await _lensTypeRepository.SearchAsync(lt => lt.LensTypeId == item.LensTypeId);
-                        item.LensType = lensTypes.FirstOrDefault();
-                    }
-                    if (item.FeatureId.HasValue)
-                    {
-                        var features = await _lensFeatureRepository.SearchAsync(f => f.FeatureId == item.FeatureId);
-                        item.Feature = features.FirstOrDefault();
-                    }
-                    if (item.PrescriptionId.HasValue)
-                    {
-                        var prescriptions = await _prescriptionRepository.SearchAsync(p => p.PrescriptionId == item.PrescriptionId);
-                        item.Prescription = prescriptions.FirstOrDefault();
-                    }
-                }
-            }
-            
+                await EnrichOrderItemsAsync(new[] { order });
             return order;
         }
 
@@ -537,27 +377,30 @@ namespace Services.GlassesService
             var orders = await _orderRepository.SearchAsyncInclude(
                 o => o.UserId == userId,
                 o => o.OrderItems,
-                o => o.Payments
-            );
-            return orders.ToList();
+                o => o.Payments);
+            var list = orders.ToList();
+            await EnrichOrderItemsAsync(list);
+            return list;
         }
 
         public async Task<PaginationResult<Order>> GetOrdersByUserAsync(Guid userId, int currentPage = 1, int pageSize = 10)
         {
-            return await _orderRepository.SearchWithPagingAsyncIncludeOrderBy(
+            var result = await _orderRepository.SearchWithPagingAsyncIncludeOrderBy(
                 o => o.UserId == userId,
                 currentPage,
                 pageSize,
                 orderBy: o => o.CreatedAt,
                 ascending: false,
                 o => o.OrderItems,
-                o => o.Payments
-            );
+                o => o.User,
+                o => o.Payments);
+            await EnrichOrderItemsAsync(result.Items);
+            return result;
         }
 
         public async Task<PaginationResult<Order>> GetAllOrdersAsync(int currentPage = 1, int pageSize = 10)
         {
-            return await _orderRepository.SearchWithPagingAsyncIncludeOrderBy(
+            var result = await _orderRepository.SearchWithPagingAsyncIncludeOrderBy(
                 o => true,
                 currentPage,
                 pageSize,
@@ -565,84 +408,101 @@ namespace Services.GlassesService
                 ascending: false,
                 o => o.OrderItems,
                 o => o.User,
-                o => o.Payments
-            );
+                o => o.Payments);
+            await EnrichOrderItemsAsync(result.Items);
+            return result;
         }
 
-        #endregion
+        private async Task EnrichOrderItemsAsync(IEnumerable<Order> orders)
+        {
+            foreach (var order in orders)
+            {
+                if (order.OrderItems == null) continue;
+                foreach (var item in order.OrderItems)
+                {
+                    if (item.FrameId.HasValue && item.Frame == null)
+                    {
+                        var frames = await _frameRepository.SearchAsync(f => f.FrameId == item.FrameId);
+                        item.Frame = frames.FirstOrDefault();
+                    }
+                    if (item.LensTypeId.HasValue && item.LensType == null)
+                    {
+                        var lensTypes = await _lensTypeRepository.SearchAsync(lt => lt.LensTypeId == item.LensTypeId);
+                        item.LensType = lensTypes.FirstOrDefault();
+                    }
+                    if (item.FeatureId.HasValue && item.Feature == null)
+                    {
+                        var features = await _lensFeatureRepository.SearchAsync(f => f.FeatureId == item.FeatureId);
+                        item.Feature = features.FirstOrDefault();
+                    }
+                    if (item.PrescriptionId.HasValue && item.Prescription == null)
+                    {
+                        var prescriptions = await _prescriptionRepository.SearchAsync(p => p.PrescriptionId == item.PrescriptionId);
+                        item.Prescription = prescriptions.FirstOrDefault();
+                    }
+                    if (item.Frame        != null) item.Frame.OrderItems        = null;
+                    if (item.LensType     != null) item.LensType.OrderItems     = null;
+                    if (item.Feature      != null) item.Feature.OrderItems      = null;
+                    if (item.Prescription != null)
+                    {
+                        item.Prescription.OrderItems = null;
+                        if (item.Prescription.User != null) item.Prescription.User.Orders = null;
+                    }
+                    item.Order = null;
+                }
+                if (order.User != null) order.User.Orders = null;
+            }
+        }
 
-        #region Update Operations
+        // ================================================================
+        //  UPDATE
+        // ================================================================
 
         public async Task<Order?> UpdateOrderStatusAsync(Guid orderId, string newStatus, string userRole, Guid userId)
         {
             var order = await GetOrderByIdAsync(orderId);
+            if (order == null) return null;
 
-            if (order == null)
-            {
-                return null;
-            }
-
-            var currentStatus = order.Status?.ToLower() ?? OrderStatus.Pending;
+            var current = order.Status?.ToLower() ?? OrderStatus.Pending;
             newStatus = newStatus.ToLower();
 
-            // Validate status transition
-            if (!ValidStatusTransitions.ContainsKey(currentStatus) ||
-                !ValidStatusTransitions[currentStatus].Contains(newStatus))
-            {
+            if (!ValidStatusTransitions.TryGetValue(current, out var allowed) || !allowed.Contains(newStatus))
                 return null;
-            }
 
-            // Role-based permissions
             switch (userRole.ToLower())
             {
                 case "customer":
-                    // Customer cannot modify orders after creation
                     return null;
-
                 case "staff":
-                    // Staff can update shipping status (processing, shipped, delivered)
-                    var staffAllowedStatuses = new[] { OrderStatus.Processing, OrderStatus.Shipped, OrderStatus.Delivered };
-                    if (!staffAllowedStatuses.Contains(newStatus))
-                    {
-                        return null;
-                    }
+                    var staffAllowed = new[] { OrderStatus.Processing, OrderStatus.Shipped, OrderStatus.Delivered };
+                    if (!staffAllowed.Contains(newStatus)) return null;
                     break;
-
                 case "manager":
                 case "admin":
-                    // Manager/Admin can do all transitions including cancel
                     break;
-
                 default:
                     return null;
             }
 
             order.Status = newStatus;
 
-            // Set arrival/delivery dates when delivered
             if (newStatus == OrderStatus.Delivered)
             {
                 order.ArrivalDate = TimeHelper.Now;
                 order.DeliveredAt = TimeHelper.Now;
             }
 
-            // Restore stock when order is cancelled
             if (newStatus == OrderStatus.Cancelled)
             {
-                // Get order items to restore stock
-                var orderWithItems = await GetOrderByIdWithDetailsAsync(orderId);
-                if (orderWithItems != null)
+                var full = await GetOrderByIdWithDetailsAsync(orderId);
+                if (full?.OrderItems != null)
                 {
-                    foreach (var item in orderWithItems.OrderItems)
+                    foreach (var item in full.OrderItems)
                     {
                         if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
-                        {
                             await RestoreVariantStockAsync(item.FrameId.Value, item.SelectedColorId.Value, item.Quantity ?? 1);
-                        }
                         else if (item.FrameId.HasValue)
-                        {
                             await RestoreFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
-                        }
                     }
                 }
             }
@@ -652,49 +512,37 @@ namespace Services.GlassesService
 
         public async Task<Order?> UpdateOrderShippingAsync(Guid orderId, string shippingMethod, double shippingFee, double totalAmount)
         {
+            // Clear tracker to discard poisoned navigation state left by
+            // EnrichOrderItemsAsync (item.Order = null, user.Orders = null)
+            // which would otherwise cause SaveAsync to null-out FK columns.
+            _orderRepository.ClearTracker();
+
             var order = await GetOrderByIdAsync(orderId);
+            if (order == null) return null;
 
-            if (order == null)
-            {
-                return null;
-            }
-
-            // Update shipping information
             order.ShippingMethod = shippingMethod;
-            order.ShippingFee = shippingFee;
-            order.TotalAmount = totalAmount;
+            order.ShippingFee    = shippingFee;
+            order.TotalAmount    = totalAmount;
 
-            return await _orderRepository.UpdateAsync(order);
+            await _orderRepository.SaveAsync();
+            return order;
         }
 
         public async Task<bool> CanModifyOrderAsync(Guid orderId)
         {
-            // Check if order has been paid
-            var payments = await _paymentRepository.SearchAsync(p => 
-                p.OrderId == orderId && 
+            var payments = await _paymentRepository.SearchAsync(p =>
+                p.OrderId == orderId &&
                 p.PaymentStatus != null && p.PaymentStatus.ToLower() == "completed");
-
             return !payments.Any();
         }
 
         public async Task<Order?> ConfirmDeliveryAsync(Guid orderId, Guid userId)
         {
             var order = await GetOrderByIdAsync(orderId);
-
-            if (order == null)
-                return null;
-
-            // Only the order owner can confirm delivery
-            if (order.UserId != userId)
-                return null;
-
-            // Only delivered orders can be confirmed
-            if (order.Status?.ToLower() != OrderStatus.Delivered)
-                return null;
-
-            // Already confirmed
-            if (order.DeliveryConfirmedAt.HasValue)
-                return order;
+            if (order == null)                                    return null;
+            if (order.UserId != userId)                           return null;
+            if (order.Status?.ToLower() != OrderStatus.Delivered) return null;
+            if (order.DeliveryConfirmedAt.HasValue)               return order;
 
             order.DeliveryConfirmedAt = TimeHelper.Now;
             return await _orderRepository.UpdateAsync(order);
@@ -703,105 +551,137 @@ namespace Services.GlassesService
         public async Task<Order?> CancelOrderByCustomerAsync(Guid orderId, Guid userId)
         {
             var order = await GetOrderByIdAsync(orderId);
+            if (order == null)                                  return null;
+            if (order.UserId != userId)                         return null;
+            if (order.Status?.ToLower() != OrderStatus.Pending) return null;
 
-            if (order == null)
-                return null;
-
-            // Only the order owner can cancel
-            if (order.UserId != userId)
-                return null;
-
-            // Only pending orders can be cancelled by customers
-            if (order.Status?.ToLower() != OrderStatus.Pending)
-                return null;
-
-            // Restore stock for each order item
-            var orderWithDetails = await GetOrderByIdWithDetailsAsync(orderId);
-            if (orderWithDetails?.OrderItems != null)
+            var full = await GetOrderByIdWithDetailsAsync(orderId);
+            if (full?.OrderItems != null)
             {
-                foreach (var item in orderWithDetails.OrderItems)
+                foreach (var item in full.OrderItems)
                 {
-                    if (item.SelectedColorId.HasValue && item.Quantity.HasValue)
-                    {
-                        var frameColors = await _frameColorRepository.SearchAsync(
-                            fc => fc.ColorId == item.SelectedColorId && fc.FrameId == item.FrameId);
-                        var frameColor = frameColors.FirstOrDefault();
-
-                        if (frameColor != null)
-                        {
-                            frameColor.StockQuantity = (frameColor.StockQuantity ?? 0) + item.Quantity.Value;
-                            await _frameColorRepository.UpdateAsync(frameColor);
-                        }
-                    }
+                    if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
+                        await RestoreVariantStockAsync(item.FrameId.Value, item.SelectedColorId.Value, item.Quantity ?? 1);
+                    else if (item.FrameId.HasValue)
+                        await RestoreFrameStockAsync(item.FrameId.Value, item.Quantity ?? 1);
                 }
             }
 
-            // Update order status to cancelled
-            order.Status = OrderStatus.Cancelled;
+            order.Status              = OrderStatus.Cancelled;
             order.CancelledByCustomer = true;
-
             return await _orderRepository.UpdateAsync(order);
         }
 
-        #endregion
-
-        #region Price Calculation
+        // ================================================================
+        //  PRICE CALCULATION
+        // ================================================================
 
         public async Task<double> CalculateOrderTotalAsync(List<OrderItem> orderItems)
         {
             double total = 0;
-
             foreach (var item in orderItems)
-            {
-                var itemPrice = await CalculateItemPriceAsync(item);
-                total += itemPrice * (item.Quantity ?? 1);
-            }
-
+                total += await CalculateItemPriceAsync(item) * (item.Quantity ?? 1);
             return total;
         }
 
         public async Task<double> CalculateItemPriceAsync(OrderItem item)
         {
-            double basePrice = 0;
-            double lensTypePrice = 0;
-            double featurePrice = 0;
+            double basePrice      = 0;
+            double lensTypePrice  = 0;
+            double featurePrice   = 0;
             double lensIndexPrice = 0;
+            double colorExtraCost = 0;
 
-            // Get frame base price
             if (item.FrameId.HasValue)
             {
-                var frames = await _frameRepository.SearchAsync(f => f.FrameId == item.FrameId);
-                var frame = frames.FirstOrDefault();
-                basePrice = frame?.BasePrice ?? 0;
+                var frames  = await _frameRepository.SearchAsync(f => f.FrameId == item.FrameId);
+                basePrice   = frames.FirstOrDefault()?.BasePrice ?? 0;
             }
-
-            // Get lens type extra price
             if (item.LensTypeId.HasValue)
             {
-                var lensTypes = await _lensTypeRepository.SearchAsync(lt => lt.LensTypeId == item.LensTypeId);
-                var lensType = lensTypes.FirstOrDefault();
-                lensTypePrice = lensType?.BasePrice ?? 0;
+                var lt       = await _lensTypeRepository.SearchAsync(l => l.LensTypeId == item.LensTypeId);
+                lensTypePrice = lt.FirstOrDefault()?.BasePrice ?? 0;
             }
-
-            // Get lens feature extra price
             if (item.FeatureId.HasValue)
             {
-                var features = await _lensFeatureRepository.SearchAsync(f => f.FeatureId == item.FeatureId);
-                var feature = features.FirstOrDefault();
-                featurePrice = feature?.ExtraPrice ?? 0;
+                var feat     = await _lensFeatureRepository.SearchAsync(f => f.FeatureId == item.FeatureId);
+                featurePrice = feat.FirstOrDefault()?.ExtraPrice ?? 0;
             }
-
-            // Get lens index additional price
             if (item.LensIndexId.HasValue)
             {
-                var lensIndices = await _lensIndexRepository.SearchAsync(li => li.LensIndexId == item.LensIndexId);
-                var lensIndex = lensIndices.FirstOrDefault();
-                lensIndexPrice = lensIndex?.AdditionalPrice ?? 0;
+                var idx       = await _lensIndexRepository.SearchAsync(l => l.LensIndexId == item.LensIndexId);
+                lensIndexPrice = idx.FirstOrDefault()?.AdditionalPrice ?? 0;
+            }
+            if (item.FrameId.HasValue && item.SelectedColorId.HasValue)
+            {
+                var fc       = await _frameColorRepository.SearchAsync(
+                    c => c.FrameId == item.FrameId && c.ColorId == item.SelectedColorId);
+                colorExtraCost = fc.FirstOrDefault()?.ColorExtraCost ?? 0;
             }
 
-            return basePrice + lensTypePrice + featurePrice + lensIndexPrice;
+            return basePrice + lensTypePrice + featurePrice + lensIndexPrice + colorExtraCost;
         }
 
-        #endregion
+        // ================================================================
+        //  STOCK HELPERS
+        // ================================================================
+
+        private async Task DeductFrameStockAsync(Guid frameId, int quantity)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame  = frames.FirstOrDefault();
+            if (frame == null) return;
+            frame.StockQuantity = Math.Max(0, (frame.StockQuantity ?? 0) - quantity);
+            if (frame.StockQuantity <= 0) frame.Status = "out_of_stock";
+            await _frameRepository.UpdateAsync(frame);
+        }
+
+        private async Task DeductVariantStockAsync(Guid frameId, Guid colorId, int quantity)
+        {
+            var variants = await _frameColorRepository.SearchAsync(fc => fc.FrameId == frameId && fc.ColorId == colorId);
+            var variant  = variants.FirstOrDefault();
+            if (variant != null)
+            {
+                variant.StockQuantity = Math.Max(0, (variant.StockQuantity ?? 0) - quantity);
+                await _frameColorRepository.UpdateAsync(variant);
+            }
+            await RecalculateFrameStockAsync(frameId);
+        }
+
+        private async Task RestoreFrameStockAsync(Guid frameId, int quantity)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame  = frames.FirstOrDefault();
+            if (frame == null) return;
+            frame.StockQuantity = (frame.StockQuantity ?? 0) + quantity;
+            if (frame.StockQuantity > 0 && frame.Status?.ToLower() == "out_of_stock")
+                frame.Status = "available";
+            await _frameRepository.UpdateAsync(frame);
+        }
+
+        private async Task RestoreVariantStockAsync(Guid frameId, Guid colorId, int quantity)
+        {
+            var variants = await _frameColorRepository.SearchAsync(fc => fc.FrameId == frameId && fc.ColorId == colorId);
+            var variant  = variants.FirstOrDefault();
+            if (variant != null)
+            {
+                variant.StockQuantity = (variant.StockQuantity ?? 0) + quantity;
+                await _frameColorRepository.UpdateAsync(variant);
+            }
+            await RecalculateFrameStockAsync(frameId);
+        }
+
+        private async Task RecalculateFrameStockAsync(Guid frameId)
+        {
+            var frames = await _frameRepository.SearchAsync(f => f.FrameId == frameId);
+            var frame  = frames.FirstOrDefault();
+            if (frame == null) return;
+            var allVariants = await _frameColorRepository.SearchAsync(fc => fc.FrameId == frameId);
+            var totalStock  = allVariants.Sum(v => v.StockQuantity ?? 0);
+            frame.StockQuantity = totalStock;
+            if (totalStock <= 0)      frame.Status = "out_of_stock";
+            else if (frame.Status?.ToLower() == "out_of_stock") frame.Status = "available";
+            await _frameRepository.UpdateAsync(frame);
+        }
     }
 }
