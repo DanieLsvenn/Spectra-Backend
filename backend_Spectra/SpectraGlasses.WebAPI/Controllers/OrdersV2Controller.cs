@@ -74,7 +74,9 @@ namespace SpectraGlasses.WebAPI.Controllers
 
             var createdOrder = await _orderService.CreateOrderAsync(order, orderItems);
 
-            var shippingFee = _shippingService.CalculateShippingFee(
+            // Use frontend-provided shipping fee (which reads business rules) if available;
+            // fall back to backend calculation otherwise.
+            var shippingFee = request.ShippingFee ?? _shippingService.CalculateShippingFee(
                 createdOrder.ShippingMethod, createdOrder.TotalAmount ?? 0, createdOrder.ShippingAddress);
             createdOrder.ShippingFee = shippingFee;
             createdOrder.TotalAmount = (createdOrder.TotalAmount ?? 0) + shippingFee;

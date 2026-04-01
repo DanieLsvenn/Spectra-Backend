@@ -13,7 +13,7 @@ namespace SpectraGlasses.WebAPI.Controllers
     [Route("api/[controller]")]
     public class PingController : ControllerBase
     {
-        private const string BuildTag = "2026-04-01-v10-enrich-detach";
+        private const string BuildTag = "2026-04-01-v11-shipping-fee-passthrough";
 
         private readonly GenericRepository<Order> _orderRepo;
         private readonly GenericRepository<OrderItem> _orderItemRepo;

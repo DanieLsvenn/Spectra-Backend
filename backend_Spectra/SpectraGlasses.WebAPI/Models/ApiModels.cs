@@ -200,6 +200,7 @@
         public string ShippingAddress { get; set; } = string.Empty;
         public string? ShippingMethod { get; set; }
         public string? Notes { get; set; }
+        public double? ShippingFee { get; set; }
         public List<CreateOrderItemRequest> Items { get; set; } = new();
     }
 
